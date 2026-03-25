@@ -1,45 +1,66 @@
-import NetInfo from "@react-native-community/netinfo";
 import TcpSocket from "react-native-tcp-socket";
 import DataModal from "../../components/data/DataModal";
 
 let CMD = DataModal;
 
-const DEFAULT_PRINTER_IP = "192.168.1.126";
 const printerPort = 9100;
+const DEFAULT_PRINTER_IP = "192.168.1.126";
 
-export const connectToPrinter = (
-  setPrinterConnected,
-  setConnectionMessage,
-  setErrorMessage,
+/**
+ * Print KOT items to a single printer.
+ * Dashboard is responsible for connection check + grouping + retries.
+ */
+export const printToPrinter = ({
+  printerName,
+  orderItems,
   printCallback,
-  orderData,
-  printSuccess = () => {},
-) => {
-  // Normalize response into a flat "products" array.
-  // Observed API response: orderData.data = [[{...product...}]]
-  const products = Array.isArray(orderData?.data?.[0]?.[0])
-    ? orderData?.data?.[0]?.[0]
-    : Array.isArray(orderData?.data?.[0])
-      ? orderData?.data?.[0]
-      : [];
+  timeoutMs = 5000,
+}) => {
+  const products = Array.isArray(orderItems) ? orderItems : [];
+  const headerItem = products?.[0] ?? {};
+  const host = printerName || headerItem?.printerName || DEFAULT_PRINTER_IP;
 
-  const headerItem = products?.[0] ?? orderData?.data?.[0]?.[0] ?? {};
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let printingFinishing = false;
 
-  const printerIP = headerItem?.printerName || DEFAULT_PRINTER_IP;
-  console.log("ip", printerIP);
-  NetInfo.fetch().then((state) => {
-    setErrorMessage("");
-    setConnectionMessage("Connecting...");
-    if (state.isConnected) {
-      const socket = TcpSocket.createConnection({
-        host: printerIP,
-        port: printerPort,
-        timeout: 5000,
-      });
-      socket.on("connect", () => {
+    const safeResolve = (ok) => {
+      if (settled) return;
+      settled = true;
+      try {
+        printCallback?.(ok);
+      } catch (e) {
+        // ignore callback errors
+      }
+      resolve(ok);
+    };
+
+    const safeReject = (err) => {
+      if (settled) return;
+      settled = true;
+      try {
+        printCallback?.(false);
+      } catch (e) {
+        // ignore callback errors
+      }
+      reject(err);
+    };
+
+    if (!host) {
+      safeReject(new Error("Missing printerName/host"));
+      return;
+    }
+
+    const socket = TcpSocket.createConnection({
+      host,
+      port: printerPort,
+      timeout: timeoutMs,
+    });
+
+    socket.on("connect", () => {
+      try {
+        console.log("Printing to printer", host, "items", products.length);
         socket.write("\x1b\x40");
-        setPrinterConnected(true);
-        setConnectionMessage("Connected to printer");
 
         const dateTime = new Date().toLocaleString();
 
@@ -56,13 +77,7 @@ export const connectToPrinter = (
           return " ".repeat(3);
         })();
 
-        socket.write("\x1b\x40"); //initialize
-        // socket.write(CMD.TEXT_FORMAT.TXT_ALIGN_CT);
-        // socket.write(CMD.TEXT_FORMAT.TXT_BOLD_ON);
-        // socket.write(CMD.TEXT_FORMAT.TXT_4SQUARE);
-        // socket.write(restaurantname);
-        // socket.write(CMD.TEXT_FORMAT.TXT_BOLD_OFF);
-        // socket.write("\x0a\x0a\x0a");
+        socket.write("\x1b\x40"); // initialize
 
         socket.write(CMD.TEXT_FORMAT.TXT_FONT_A);
         socket.write(CMD.TEXT_FORMAT.TXT_NORMAL);
@@ -85,9 +100,6 @@ export const connectToPrinter = (
         socket.write("KOT No: " + headerItem?.kotno);
         socket.write("\x0a");
 
-        // socket.write(CMD.TEXT_FORMAT.TXT_ALIGN_LT);
-        // socket.write("Products");
-        // socket.write("\x0a");
         socket.write("-----------------------------------------------");
         socket.write("\x0a");
 
@@ -110,7 +122,7 @@ export const connectToPrinter = (
         products.forEach((product, index) => {
           const { itemName, unit, description, qty } = product;
           const slnoLength = (index + 1).length;
-          const productNameLength = itemName.length;
+          const productNameLength = (itemName ?? "").length;
           const qtyStr = (qty ?? 0).toString();
           const quantityLength = qtyStr.length;
 
@@ -129,8 +141,8 @@ export const connectToPrinter = (
 
           const paddedProductname =
             productNameLength < 24
-              ? itemName + ` (${unit})` + " ".repeat(paddingSpaces)
-              : itemName.slice(0, 24) + ` (${unit})`;
+              ? (itemName ?? "") + ` (${unit})` + " ".repeat(paddingSpaces)
+              : (itemName ?? "").slice(0, 24) + ` (${unit})`;
 
           const paddedQuantity =
             quantityLength < 5
@@ -193,29 +205,42 @@ export const connectToPrinter = (
         socket.write("\x0a"); // Line feed
 
         socket.write("\n");
+        socket.write("\x1D\x56\x42\x00"); // Cut paper
 
-        socket.write("\x1D\x56\x42\x00"); //Cut paper
-
+        printingFinishing = true;
+        // Delay end so the ESC/POS cut command flushes to the printer buffer.
         setTimeout(() => {
-          socket.end();
-          printSuccess();
-          printCallback(true);
+          try {
+            socket.end();
+          } catch (e) {
+            // ignore
+          }
+          safeResolve(true);
         }, 2000);
-      });
-      socket.on("error", (error) => {
-        setErrorMessage("Error connecting to printer: " + error);
-        console.log("Error connecting to printer:", error);
-        printCallback(false);
-      });
-      socket.on("close", () => {
-        setPrinterConnected(false);
-        setConnectionMessage("Not connected to printer");
-        console.log("Connection to printer closed");
-      });
-    } else {
-      setErrorMessage("No internet connection");
-      printCallback(false);
-      console.log("No internet connection");
-    }
+      } catch (err) {
+        try {
+          socket.end();
+        } catch (e) {
+          // ignore
+        }
+        safeReject(err);
+      }
+    });
+
+    socket.on("error", (error) => {
+      safeReject(
+        new Error(
+          "Printer connection/write error: " +
+            (error?.message ? String(error.message) : String(error)),
+        ),
+      );
+    });
+
+    socket.on("close", () => {
+      // Ignore close if we already ended after printing.
+      if (!settled && !printingFinishing) {
+        safeReject(new Error("Printer connection closed"));
+      }
+    });
   });
 };

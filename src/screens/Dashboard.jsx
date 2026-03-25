@@ -1,21 +1,25 @@
 import React, { useEffect, useState } from "react";
 import {
+  Modal,
+  ScrollView,
   StyleSheet,
   View,
   Keyboard,
   TouchableWithoutFeedback,
+  TouchableOpacity,
+  Text,
   BackHandler,
 } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
+import TcpSocket from "react-native-tcp-socket";
 import { useNavigation } from "@react-navigation/native";
 
 import Theme from "../theme/Theme";
 import { useAppStore } from "../stores";
 import { AppBar } from "../components/app/AppBar";
-import { connectToPrinter } from "../components/utils/Printer";
+import { printToPrinter } from "../components/utils/Printer";
 import { MenuList } from "../components/app/MenuList";
 import { OrderList } from "../components/app/OrderList";
-import { PrinterStatus } from "../components/app/PrinterStatus";
 import { CurrentOrderItem } from "../components/app/CurrentOrderItem";
 import { SideMenu } from "../components/app/SideMenu";
 import { useOrientation } from "../components/context/OrientationContext";
@@ -30,16 +34,17 @@ const Dashboard = () => {
   const isLandscape = useOrientation();
   const [isLoading, setIsLoading] = useState(true);
   const [isModalVisible, setModalVisible] = useState(false);
-  const [printStatus, setPrintStatus] = useState("");
   const [isMenuShown, showMenu] = useState(false);
   const [foodItems, setFoodItems] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(1);
   const [filteredFoodItems, setFilteredFoodItems] = useState([]);
   const [selectedItemForEdit, setSelectedItemForEdit] = useState(null);
-  const [printerConnected, setPrinterConnected] = useState(false);
-  const [connectionMessage, setConnectionMessage] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
+  const [printerJobs, setPrinterJobs] = useState([]);
+  const [printerGroups, setPrinterGroups] = useState([]); // [{ printerName, items }]
+  const [isPrinting, setIsPrinting] = useState(false);
+  const hasFinalizedRef = React.useRef(false);
+  const finalizeMetaRef = React.useRef({ initialOrderListLength: 0, selectedIndex: 0 });
 
   const [showRightDrawer, setShowRightDrawer] = useState(false);
 
@@ -83,51 +88,296 @@ const Dashboard = () => {
     showMenu(!isMenuShown);
   };
 
-  function printCallback(success) {
-    if (success) {
-      setPrintStatus("success");
-    } else {
-      setPrintStatus("failed");
+  const DEFAULT_PRINTER_IP = "192.168.1.126";
+  const printerPort = 9100;
+
+  const isProductObject = (x) =>
+    x &&
+    typeof x === "object" &&
+    x?.itemName != null &&
+    (x?.itemID != null || x?.itemId != null);
+
+  const normalizePrinterGroups = (apiResponse) => {
+    // DO NOT regroup by printerName because backend is already grouped by kitchen/printer.
+    // We convert each already-grouped "kitchen items array" into a print job.
+    const data = apiResponse?.data ?? apiResponse;
+
+    const looksLikeProductsArray = (x) =>
+      Array.isArray(x) && (x.length === 0 || isProductObject(x[0]));
+    const looksLikeGroupsArray = (x) =>
+      Array.isArray(x) && x.every((g) => looksLikeProductsArray(g));
+
+    const level0 = Array.isArray(data) ? data : [];
+
+    // Try to locate the level that contains "kitchen item arrays".
+    let groupsLevel = null;
+
+    // Case A: data = [ kitchenItems1[], kitchenItems2[], ... ]
+    if (looksLikeGroupsArray(level0)) {
+      groupsLevel = level0;
     }
-  }
 
-  const handlePrintButtonPress = async () => {
-    const body = {
-      id: null,
-      date: new Date().toISOString(),
-      items: orderList[selectedIndex].items,
-    };
-
-    const respData = await fetchData(
-      `api/v1/restaurent/svprintKot?sectionId=${orderList[selectedIndex].section.id}&tableId=${orderList[selectedIndex].table.id}&tableName=${orderList[selectedIndex].table.tableName}&salesManId=${selectedWaiter.id}`,
-      "post",
-      body,
-    );
-    if (respData) {
-      console.log("respData", JSON.stringify(respData));
-      if (selectedIndex >= 0 && selectedIndex < orderList.length) {
-        setModalVisible(!isModalVisible);
-        connectToPrinter(
-          setPrinterConnected,
-          setConnectionMessage,
-          setErrorMessage,
-          printCallback,
-          respData,
-          () => {
-            setShowRightDrawer(false);
-            removeOrder(selectedIndex);
-            if (orderList.length === 1) {
-              setTable(null);
-              navigation.navigate("table");
-            }
-          },
-        );
+    // Case B: data = [ [ kitchenItems1[], kitchenItems2[], ... ] ]
+    if (!groupsLevel && Array.isArray(level0) && level0.length === 1) {
+      if (looksLikeGroupsArray(level0[0])) {
+        groupsLevel = level0[0];
       }
+    }
+
+    // Case C: data = [ product, product, ... ] (single kitchen)
+    if (!groupsLevel && looksLikeProductsArray(level0)) {
+      groupsLevel = [level0];
+    }
+
+    // Case D: data = [ products[] ] (single kitchen nested)
+    if (!groupsLevel && level0.length > 0 && looksLikeProductsArray(level0[0])) {
+      groupsLevel = [level0[0]];
+    }
+
+    if (!groupsLevel || groupsLevel.length === 0) return [];
+
+    return groupsLevel
+      .map((items, idx) => {
+        const filtered = Array.isArray(items)
+          ? items.filter(isProductObject)
+          : [];
+        if (filtered.length === 0) return null;
+
+        const printerName = filtered[0]?.printerName || DEFAULT_PRINTER_IP;
+        return {
+          groupId: String(idx),
+          printerName,
+          items: filtered,
+        };
+      })
+      .filter(Boolean);
+  };
+
+  const updateJob = (groupId, patch) => {
+    setPrinterJobs((prev) =>
+      prev.map((job) =>
+        job.groupId === groupId ? { ...job, ...patch } : job,
+      ),
+    );
+  };
+
+  const checkPrinterConnection = async (printerName) => {
+    const host = printerName || DEFAULT_PRINTER_IP;
+
+    return await new Promise((resolve) => {
+      let resolved = false;
+      const socket = TcpSocket.createConnection({
+        host,
+        port: printerPort,
+        timeout: 3000,
+      });
+
+      socket.on("connect", () => {
+        resolved = true;
+        socket.end();
+        resolve({ ok: true });
+      });
+
+      socket.on("error", (err) => {
+        if (resolved) return;
+        resolved = true;
+        socket.end();
+        resolve({
+          ok: false,
+          error: String(err?.message ?? err ?? "Connection failed"),
+        });
+      });
+
+      socket.on("close", () => {
+        if (resolved) return;
+        resolved = true;
+        resolve({ ok: false, error: "Connection closed" });
+      });
+    });
+  };
+
+  const finalizeIfAllPrinted = () => {
+    if (hasFinalizedRef.current) return;
+    hasFinalizedRef.current = true;
+
+    setModalVisible(false);
+    setShowRightDrawer(false);
+    removeOrder(finalizeMetaRef.current.selectedIndex);
+
+    if (finalizeMetaRef.current.initialOrderListLength === 1) {
+      setTable(null);
+      navigation.navigate("table");
     }
   };
 
+  const handleRetryPrinter = async (groupId) => {
+    if (hasFinalizedRef.current) return;
+
+    const group = printerGroups.find((g) => g.groupId === groupId);
+    if (!group) return;
+
+    updateJob(groupId, {
+      status: "checking",
+      message: "Retrying connection...",
+      error: "",
+    });
+
+    const conn = await checkPrinterConnection(group.printerName);
+    if (!conn.ok) {
+      updateJob(groupId, {
+        status: "failed",
+        message: "",
+        error: conn.error || "Connection failed",
+      });
+      return;
+    }
+
+    updateJob(groupId, {
+      status: "connected",
+      message: "Connected",
+      error: "",
+    });
+
+    updateJob(groupId, {
+      status: "printing",
+      message: "Printing...",
+      error: "",
+    });
+
+    try {
+      await printToPrinter({ printerName: group.printerName, orderItems: group.items });
+
+      setPrinterJobs((prev) => {
+        const updated = prev.map((job) =>
+          job.groupId === groupId
+            ? { ...job, status: "printed", message: "Printed", error: "" }
+            : job,
+        );
+        const allOk =
+          updated.length > 0 && updated.every((job) => job.status === "printed");
+        if (allOk) finalizeIfAllPrinted();
+        return updated;
+      });
+    } catch (err) {
+      updateJob(groupId, {
+        status: "failed",
+        message: "",
+        error: String(err?.message ?? err ?? "Print failed"),
+      });
+    }
+  };
+
+  const handlePrintButtonPress = async () => {
+    if (isPrinting) return;
+
+    const currentOrder = orderList[selectedIndex];
+    if (!currentOrder) return;
+
+    const initialOrderListLength = orderList.length;
+    finalizeMetaRef.current = { initialOrderListLength, selectedIndex };
+
+    const body = {
+      id: null,
+      date: new Date().toISOString(),
+      items: currentOrder.items,
+    };
+
+    const respData = await fetchData(
+      `api/v1/restaurent/svprintKot?sectionId=${currentOrder.section.id}&tableId=${currentOrder.table.id}&tableName=${currentOrder.table.tableName}&salesManId=${selectedWaiter.id}`,
+      "post",
+      body,
+    );
+
+    if (!respData) return;
+
+    console.log("svprintKot respData.data shape", {
+      hasData: !!respData?.data,
+      isArray: Array.isArray(respData?.data),
+      dataLength: Array.isArray(respData?.data) ? respData.data.length : null,
+      data0IsArray: Array.isArray(respData?.data?.[0]),
+      data0Len: Array.isArray(respData?.data?.[0]) ? respData.data[0].length : null,
+    });
+
+    const groups = normalizePrinterGroups(respData);
+    if (groups.length === 0) return;
+
+    console.log(
+      "KOT printer groups",
+      groups.map((g) => ({ printerName: g.printerName, count: g.items.length })),
+    );
+    setPrinterGroups(groups);
+    setPrinterJobs(
+      groups.map((g) => ({
+        groupId: g.groupId,
+        printerName: g.printerName,
+        status: "pending",
+        message: "Queued",
+        error: "",
+      })),
+    );
+    setModalVisible(true);
+
+    setIsPrinting(true);
+    hasFinalizedRef.current = false;
+
+    const successMap = new Map(groups.map((g) => [g.groupId, false]));
+
+    for (const group of groups) {
+      updateJob(group.groupId, {
+        status: "checking",
+        message: "Checking connection...",
+        error: "",
+      });
+
+      const conn = await checkPrinterConnection(group.printerName);
+      if (!conn.ok) {
+        successMap.set(group.groupId, false);
+        updateJob(group.groupId, {
+          status: "failed",
+          message: "",
+          error: conn.error || "Connection failed",
+        });
+        continue;
+      }
+
+      updateJob(group.groupId, {
+        status: "connected",
+        message: "Connected",
+        error: "",
+      });
+
+      updateJob(group.groupId, {
+        status: "printing",
+        message: "Printing...",
+        error: "",
+      });
+
+      try {
+        await printToPrinter({ printerName: group.printerName, orderItems: group.items });
+        successMap.set(group.groupId, true);
+        updateJob(group.groupId, {
+          status: "printed",
+          message: "Printed",
+          error: "",
+        });
+      } catch (err) {
+        successMap.set(group.groupId, false);
+        updateJob(group.groupId, {
+          status: "failed",
+          message: "",
+          error: String(err?.message ?? err ?? "Print failed"),
+        });
+      }
+    }
+
+    setIsPrinting(false);
+
+    const allOk = groups.every((g) => successMap.get(g.groupId));
+    if (allOk) finalizeIfAllPrinted();
+  };
+
   const toggleModal = () => {
-    setModalVisible(!isModalVisible);
+    setModalVisible(false);
   };
 
   useEffect(() => {
@@ -295,13 +545,59 @@ const Dashboard = () => {
               removeItem={removeItemFromOrder}
             />
           )}
-        <PrinterStatus
-          isModalVisible={isModalVisible}
-          toggleModal={toggleModal}
-          printStatus={printStatus}
-          connectionMessage={connectionMessage}
-          errorMessage={errorMessage}
-        />
+        <Modal
+          animationType="slide"
+          transparent={true}
+          statusBarTranslucent
+          visible={isModalVisible}
+          onRequestClose={toggleModal}
+        >
+          <TouchableWithoutFeedback onPress={toggleModal}>
+            <View style={styles.modalContainer}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Printer Status</Text>
+
+                <ScrollView style={styles.printerList}>
+                  {printerJobs.map((job) => (
+                    <View key={job.groupId} style={styles.printerRow}>
+                      <View style={styles.printerRowHeader}>
+                        <Text style={styles.printerName}>{job.printerName}</Text>
+                        <Text style={styles.printerStatus}>
+                          {job.status}
+                        </Text>
+                      </View>
+
+                      {!!job.message && (
+                        <Text style={styles.printerMessage}>{job.message}</Text>
+                      )}
+                      {!!job.error && (
+                        <Text style={styles.printerError}>{job.error}</Text>
+                      )}
+
+                      {job.status === "failed" && (
+                        <TouchableOpacity
+                          style={styles.retryButton}
+                          activeOpacity={0.8}
+                          onPress={() => handleRetryPrinter(job.groupId)}
+                        >
+                          <Text style={styles.retryButtonText}>Retry</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  ))}
+                </ScrollView>
+
+                <TouchableOpacity
+                  style={styles.closeButton}
+                  activeOpacity={0.8}
+                  onPress={toggleModal}
+                >
+                  <Text style={styles.closeButtonText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
         <OrderUpdate
           isOpen={isOpen}
           toggleSheet={toggleSheet}
@@ -326,5 +622,90 @@ const styles = StyleSheet.create({
   mainFlexView: {
     flex: 1,
     flexDirection: "row",
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.75)",
+  },
+  modalContent: {
+    width: "85%",
+    maxHeight: "70%",
+    backgroundColor: "white",
+    borderRadius: 12,
+    padding: 16,
+  },
+  modalTitle: {
+    fontSize: Theme.typography.fontSize[16],
+    fontFamily: "Montserrat-SemiBold",
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  printerList: {
+    flexGrow: 0,
+    maxHeight: 360,
+    marginBottom: 12,
+  },
+  printerRow: {
+    borderWidth: 1,
+    borderColor: Theme.colors.stroke.secondary,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+    backgroundColor: Theme.colors.background.accents.white,
+  },
+  printerRowHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  printerName: {
+    flex: 1,
+    fontSize: Theme.typography.fontSize[10],
+    fontFamily: "Montserrat-Medium",
+    color: Theme.colors.text.primary.default,
+    marginRight: 10,
+  },
+  printerStatus: {
+    fontSize: Theme.typography.fontSize[10],
+    fontFamily: "Montserrat-Medium",
+    color: Theme.colors.text.primary.default,
+    textTransform: "capitalize",
+  },
+  printerMessage: {
+    marginTop: 8,
+    fontSize: Theme.typography.fontSize[10],
+    fontFamily: "Montserrat-Medium",
+    color: Theme.colors.text.secondary.default,
+  },
+  printerError: {
+    marginTop: 6,
+    fontSize: Theme.typography.fontSize[10],
+    fontFamily: "Montserrat-Medium",
+    color: Theme.colors.text.accents.red,
+  },
+  retryButton: {
+    marginTop: 10,
+    backgroundColor: Theme.colors.background.primary.default,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  retryButtonText: {
+    fontSize: Theme.typography.fontSize[12],
+    fontFamily: "Montserrat-SemiBold",
+    color: Theme.colors.text.secondary.default,
+  },
+  closeButton: {
+    backgroundColor: Theme.colors.background.primary.muted,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  closeButtonText: {
+    fontSize: Theme.typography.fontSize[12],
+    fontFamily: "Montserrat-SemiBold",
+    color: Theme.colors.text.primary.default,
   },
 });
