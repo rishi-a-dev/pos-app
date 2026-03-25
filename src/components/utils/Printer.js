@@ -4,7 +4,7 @@ import DataModal from "../../components/data/DataModal";
 
 let CMD = DataModal;
 
-const printerIP = "192.168.1.126";
+const DEFAULT_PRINTER_IP = "192.168.1.126";
 const printerPort = 9100;
 
 export const connectToPrinter = (
@@ -13,14 +13,26 @@ export const connectToPrinter = (
   setErrorMessage,
   printCallback,
   orderData,
-  printSuccess = () => {}
+  printSuccess = () => {},
 ) => {
+  // Normalize response into a flat "products" array.
+  // Observed API response: orderData.data = [[{...product...}]]
+  const products = Array.isArray(orderData?.data?.[0]?.[0])
+    ? orderData?.data?.[0]?.[0]
+    : Array.isArray(orderData?.data?.[0])
+      ? orderData?.data?.[0]
+      : [];
+
+  const headerItem = products?.[0] ?? orderData?.data?.[0]?.[0] ?? {};
+
+  const printerIP = headerItem?.printerName || DEFAULT_PRINTER_IP;
+  console.log("ip", printerIP);
   NetInfo.fetch().then((state) => {
     setErrorMessage("");
     setConnectionMessage("Connecting...");
     if (state.isConnected) {
       const socket = TcpSocket.createConnection({
-        host: orderData?.data?.[0]?.printerName || printerIP,
+        host: printerIP,
         port: printerPort,
         timeout: 5000,
       });
@@ -32,17 +44,17 @@ export const connectToPrinter = (
         const dateTime = new Date().toLocaleString();
 
         const calculateTotalItemCount = () => {
-          return orderData?.data?.reduce((total, item) => total + item?.qty, 0);
+          return products.reduce(
+            (total, item) => total + Number(item?.qty ?? 0),
+            0,
+          );
         };
 
-        const itemCountPaddingSpaces =
-          orderData?.data?.length.toString().length !== 2
-            ? calculateTotalItemCount().toString().length !== 2
-              ? " ".repeat(4)
-              : " ".repeat(3)
-            : calculateTotalItemCount().toString().length !== 2
-            ? " ".repeat(3)
-            : " ".repeat(2);
+        const itemCountPaddingSpaces = (() => {
+          const digits = calculateTotalItemCount().toString().length;
+          if (digits !== 2) return " ".repeat(4);
+          return " ".repeat(3);
+        })();
 
         socket.write("\x1b\x40"); //initialize
         // socket.write(CMD.TEXT_FORMAT.TXT_ALIGN_CT);
@@ -55,22 +67,22 @@ export const connectToPrinter = (
         socket.write(CMD.TEXT_FORMAT.TXT_FONT_A);
         socket.write(CMD.TEXT_FORMAT.TXT_NORMAL);
         socket.write(CMD.TEXT_FORMAT.TXT_ALIGN_LT);
-        socket.write("Attender: " + orderData?.data?.[0]?.waiter);
+        socket.write("Attender: " + headerItem?.waiter);
         socket.write("\x0a");
         socket.write(CMD.TEXT_FORMAT.TXT_ALIGN_LT);
-        socket.write("Section: " + orderData?.data?.[0]?.sectionName);
+        socket.write("Section: " + headerItem?.sectionName);
         socket.write("\x0a");
         socket.write(CMD.TEXT_FORMAT.TXT_ALIGN_LT);
-        socket.write("Table: " + orderData?.data?.[0]?.tableName);
+        socket.write("Table: " + headerItem?.tableName);
         socket.write("\x0a");
         socket.write(CMD.TEXT_FORMAT.TXT_ALIGN_LT);
         socket.write("Date & Time: " + dateTime);
         socket.write("\x0a");
         socket.write(CMD.TEXT_FORMAT.TXT_ALIGN_LT);
-        socket.write("Order No: " + orderData?.data?.[0]?.orderNo);
+        socket.write("Order No: " + headerItem?.orderNo);
         socket.write("\x0a");
         socket.write(CMD.TEXT_FORMAT.TXT_ALIGN_LT);
-        socket.write("KOT No: " + orderData?.data?.[0]?.kotno);
+        socket.write("KOT No: " + headerItem?.kotno);
         socket.write("\x0a");
 
         // socket.write(CMD.TEXT_FORMAT.TXT_ALIGN_LT);
@@ -95,11 +107,12 @@ export const connectToPrinter = (
         socket.write("-----------------------------------------------");
         socket.write("\x0a\x0a");
 
-        orderData?.data?.forEach((product, index) => {
+        products.forEach((product, index) => {
           const { itemName, unit, description, qty } = product;
           const slnoLength = (index + 1).length;
           const productNameLength = itemName.length;
-          const quantityLength = qty.length;
+          const qtyStr = (qty ?? 0).toString();
+          const quantityLength = qtyStr.length;
 
           const slnoPaddingSpaces =
             slnoLength !== 2 ? Math.max(0, 2 - slnoLength) : 0;
@@ -121,8 +134,8 @@ export const connectToPrinter = (
 
           const paddedQuantity =
             quantityLength < 5
-              ? " ".repeat(Math.floor(quantityPaddingSpaces)) + qty.toString()
-              : qty.toString();
+              ? " ".repeat(Math.floor(quantityPaddingSpaces)) + qtyStr
+              : qtyStr;
 
           socket.write(CMD.TEXT_FORMAT.TXT_FONT_A);
           socket.write(CMD.TEXT_FORMAT.TXT_ALIGN_LT);
@@ -158,7 +171,7 @@ export const connectToPrinter = (
         socket.write(CMD.TEXT_FORMAT.TXT_BOLD_OFF);
         socket.write(CMD.TEXT_FORMAT.TXT_BOLD_ON);
         socket.write(CMD.TEXT_FORMAT.TXT_4SQUARE);
-        socket.write(`${orderData?.data?.length}`);
+        socket.write(`${products.length}`);
         socket.write(CMD.TEXT_FORMAT.TXT_BOLD_OFF);
         socket.write(CMD.TEXT_FORMAT.TXT_NORMAL);
         socket.write(CMD.TEXT_FORMAT.TXT_FONT_A);

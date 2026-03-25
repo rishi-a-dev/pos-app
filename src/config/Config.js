@@ -1,1 +1,1 @@
-export const BASE_URL = "https://dev.datuminnovation.com/";
+export const BASE_URL = "https://Erpdemoapi.datuminnovation.com/";

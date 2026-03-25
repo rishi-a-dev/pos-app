@@ -1,7 +1,25 @@
 {
   "expo": {
     "name": "posapp",
-    "slug": "posapp",
-    "version": "1.0.0"
+    "slug": "datum-fin",
+    "android": {
+      "package": "com.datumfin.posapp"
+    },
+    "version": "1.0.0",
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to scan QR codes.",
+          "barcodeScannerEnabled": true
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "bc75d8d9-1325-42aa-9a01-3491844a96f3"
+      }
+    },
+    "owner": "tesla8988"
   }
 }

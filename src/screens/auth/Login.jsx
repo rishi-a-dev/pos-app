@@ -9,11 +9,7 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
 } from "react-native";
-import {
-  Camera,
-  useCameraDevice,
-  useCodeScanner,
-} from "react-native-vision-camera";
+import { useCameraPermissions } from "expo-camera";
 import { useSharedValue } from "react-native-reanimated";
 
 import Theme from "../../theme/Theme";
@@ -37,8 +33,7 @@ const Login = () => {
   const reset = useAppStore((state) => state.resetStore);
   const setDbData = useAppStore((state) => state.setDbData);
   const isOpen = useSharedValue(false);
-
-  const devices = useCameraDevice("back");
+  const [permission, requestPermission] = useCameraPermissions();
 
   const toggleSheet = () => {
     Keyboard.dismiss();
@@ -53,14 +48,10 @@ const Login = () => {
   };
 
   React.useEffect(() => {
-    const requestPermissions = async () => {
-      const permission = await Camera.requestCameraPermission();
-      if (permission !== "authorized" && permission !== "granted") {
-        showToast({ message: "Camera permission is required" });
-      }
-    };
-    requestPermissions();
-  }, []);
+    if (permission && !permission.granted && permission.canAskAgain) {
+      requestPermission();
+    }
+  }, [permission]);
 
   React.useEffect(() => {
     if (dbData && dbData.username) {
@@ -70,14 +61,18 @@ const Login = () => {
 
   const fetchQRData = async (qrCodeValue) => {
     try {
-      const respData = await fetchData(`auth/Qreader?qrcode=${qrCodeValue}`);
+      const respData = await fetchData(
+        `auth/Qreader?qrcode=${encodeURIComponent(qrCodeValue)}`,
+      );
       if (respData) {
         setDbData({
           ...dbData,
           skey: respData.sKey,
         });
         await new Promise((resolve) => setTimeout(resolve, 0));
-        const data = fetchData(`auth/setcon?Id=${respData.companyData.id}`);
+        const data = await fetchData(
+          `auth/setcon?Id=${respData.companyData.id}`,
+        );
         if (data) {
           setDbData({
             ...dbData,
@@ -99,21 +94,22 @@ const Login = () => {
   };
 
   const handleQrButtonPress = () => {
-    if (devices) {
+    if (permission?.granted) {
       setCameraVisible(true);
+    } else if (permission && !permission.canAskAgain) {
+      showToast({ message: "Camera permission is required" });
     } else {
-      showToast({ message: "Camera not available" });
+      requestPermission().then(({ granted }) => {
+        if (granted) setCameraVisible(true);
+        else showToast({ message: "Camera permission is required" });
+      });
     }
   };
 
-  const handleScanQR = useCodeScanner({
-    codeTypes: ["qr"],
-    onCodeScanned: (codes) => {
-      const value = codes[0].value;
-      fetchQRData(value);
-      setCameraVisible(false);
-    },
-  });
+  const handleQrScanned = (data) => {
+    fetchQRData(data);
+    setCameraVisible(false);
+  };
 
   const handleLogin = async () => {
     const body = {
@@ -213,8 +209,7 @@ const Login = () => {
         <QrcodeScanner
           isLandscape={isLandscape}
           cameraVisible={cameraVisible}
-          devices={devices}
-          handleScanQR={handleScanQR}
+          onScan={handleQrScanned}
           setCameraVisible={setCameraVisible}
         />
         <ResetConfirm

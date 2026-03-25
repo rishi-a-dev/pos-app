@@ -66,7 +66,7 @@ const Dashboard = () => {
     };
     const backHandler = BackHandler.addEventListener(
       "hardwareBackPress",
-      backAction
+      backAction,
     );
     return () => backHandler.remove();
   }, []);
@@ -101,9 +101,10 @@ const Dashboard = () => {
     const respData = await fetchData(
       `api/v1/restaurent/svprintKot?sectionId=${orderList[selectedIndex].section.id}&tableId=${orderList[selectedIndex].table.id}&tableName=${orderList[selectedIndex].table.tableName}&salesManId=${selectedWaiter.id}`,
       "post",
-      body
+      body,
     );
     if (respData) {
+      console.log("respData", JSON.stringify(respData));
       if (selectedIndex >= 0 && selectedIndex < orderList.length) {
         setModalVisible(!isModalVisible);
         connectToPrinter(
@@ -119,7 +120,7 @@ const Dashboard = () => {
               setTable(null);
               navigation.navigate("table");
             }
-          }
+          },
         );
       }
     }
@@ -136,13 +137,15 @@ const Dashboard = () => {
 
     if (selectedCategory !== 1) {
       filteredItems = filteredItems?.filter(
-        (item) => item.items.commodityID === selectedCategory
+        (item) => item.items.commodityID === selectedCategory,
       );
     }
 
     if (searchQuery) {
       filteredItems = filteredItems?.filter((item) =>
-        item?.items?.itemName?.toLowerCase().includes(searchQuery.toLowerCase())
+        item?.items?.itemName
+          ?.toLowerCase()
+          .includes(searchQuery.toLowerCase()),
       );
     }
 
@@ -183,7 +186,7 @@ const Dashboard = () => {
       }, 500);
     } else {
       const filteredItems = foodItems?.filter(
-        (item) => item.items.commodityID === selectedCategory
+        (item) => item.items.commodityID === selectedCategory,
       );
       setFilteredFoodItems(filteredItems);
       setTimeout(() => {
@@ -206,7 +209,7 @@ const Dashboard = () => {
         menuItem.items?.id + menuItem.items?.unit + menuItem.items?.rate;
 
       const existingItem = orderList[selectedIndex].items?.find(
-        (item) => item.uuid === uniqueId
+        (item) => item.uuid === uniqueId,
       );
 
       const formatedData = {

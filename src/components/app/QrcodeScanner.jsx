@@ -5,30 +5,41 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import React from "react";
-import { Camera } from "react-native-vision-camera";
+import React, { useRef, useEffect } from "react";
+import { CameraView } from "expo-camera";
 import Theme from "../../theme/Theme";
 import { Close } from "../../assets/icons/Close";
 import { Path, Svg } from "react-native-svg";
 
 const QrcodeScanner = ({
   cameraVisible,
-  devices,
   setCameraVisible,
-  handleScanQR,
+  onScan,
   isLandscape,
 }) => {
+  const scannedRef = useRef(false);
   const { height, width } = Dimensions.get("window");
   const maskRowHeight = Math.round((height - 300) / 20);
   const maskColWidth = (width - 300) / 2;
+
+  useEffect(() => {
+    if (cameraVisible) scannedRef.current = false;
+  }, [cameraVisible]);
+
+  const handleBarcodeScanned = ({ data }) => {
+    if (scannedRef.current) return;
+    scannedRef.current = true;
+    onScan?.(data);
+  };
+
   return (
     cameraVisible && (
       <View style={styles.cameraContainer}>
-        <Camera
+        <CameraView
           style={styles.camera}
-          device={devices}
-          isActive={cameraVisible}
-          codeScanner={handleScanQR}
+          facing="back"
+          barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+          onBarcodeScanned={handleBarcodeScanned}
         />
         <View style={styles.maskOutter}>
           <View

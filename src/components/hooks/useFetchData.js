@@ -15,11 +15,12 @@ export const useFetchData = () => {
       ...(dbData?.skey && { Skey: dbData.skey }),
       ...(dbData?.token && { Authorization: "bearer " + dbData.token }),
     };
-
+    const url = API_URL + apiname;
+    const config = { headers, timeout: 20000 };
     try {
       const response = await (method === "get"
-        ? axios.get(API_URL + apiname, { headers })
-        : axios.post(API_URL + apiname, body, { headers }));
+        ? axios.get(url, config)
+        : axios.post(url, body, config));
       switch (response.status) {
         case 200:
           return response.data;
@@ -35,9 +36,14 @@ export const useFetchData = () => {
           showToast({ message: "An error occurred", type: "error" });
           break;
       }
-    } catch (error) {
-      if (error.response) {
-        switch (error.response.status) {
+    } catch (err) {
+      const error = err && typeof err === "object" ? err : {};
+      const status = error.response?.status;
+      const msg = error.message ?? "Network request failed";
+      const code = error.code;
+
+      if (status != null) {
+        switch (status) {
           case 400:
             showToast({ message: "Bad Request", type: "error" });
             break;
@@ -49,7 +55,25 @@ export const useFetchData = () => {
             break;
         }
       } else {
-        showToast({ message: "An error occurred", type: "error" });
+        try {
+          if (code === "ERR_NETWORK" || msg === "Network Error") {
+            showToast({
+              message:
+                "Cannot reach server. Use the same Wi‑Fi as your computer, or open the server URL in this device’s browser to test.",
+              type: "error",
+              duration: 5000,
+            });
+          } else if (code === "ECONNABORTED") {
+            showToast({
+              message: "Request timed out. Server may be slow or unreachable.",
+              type: "error",
+            });
+          } else {
+            showToast({ message: String(msg), type: "error" });
+          }
+        } catch (toastErr) {
+          showToast({ message: String(toastErr), type: "error" });
+        }
       }
     }
     return null;
