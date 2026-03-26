@@ -44,7 +44,10 @@ const Dashboard = () => {
   const [printerGroups, setPrinterGroups] = useState([]); // [{ printerName, items }]
   const [isPrinting, setIsPrinting] = useState(false);
   const hasFinalizedRef = React.useRef(false);
-  const finalizeMetaRef = React.useRef({ initialOrderListLength: 0, selectedIndex: 0 });
+  const finalizeMetaRef = React.useRef({
+    initialOrderListLength: 0,
+    selectedIndex: 0,
+  });
 
   const [showRightDrawer, setShowRightDrawer] = useState(false);
 
@@ -130,7 +133,11 @@ const Dashboard = () => {
     }
 
     // Case D: data = [ products[] ] (single kitchen nested)
-    if (!groupsLevel && level0.length > 0 && looksLikeProductsArray(level0[0])) {
+    if (
+      !groupsLevel &&
+      level0.length > 0 &&
+      looksLikeProductsArray(level0[0])
+    ) {
       groupsLevel = [level0[0]];
     }
 
@@ -155,9 +162,7 @@ const Dashboard = () => {
 
   const updateJob = (groupId, patch) => {
     setPrinterJobs((prev) =>
-      prev.map((job) =>
-        job.groupId === groupId ? { ...job, ...patch } : job,
-      ),
+      prev.map((job) => (job.groupId === groupId ? { ...job, ...patch } : job)),
     );
   };
 
@@ -245,7 +250,10 @@ const Dashboard = () => {
     });
 
     try {
-      await printToPrinter({ printerName: group.printerName, orderItems: group.items });
+      await printToPrinter({
+        printerName: group.printerName,
+        orderItems: group.items,
+      });
 
       setPrinterJobs((prev) => {
         const updated = prev.map((job) =>
@@ -254,7 +262,8 @@ const Dashboard = () => {
             : job,
         );
         const allOk =
-          updated.length > 0 && updated.every((job) => job.status === "printed");
+          updated.length > 0 &&
+          updated.every((job) => job.status === "printed");
         if (allOk) finalizeIfAllPrinted();
         return updated;
       });
@@ -290,21 +299,9 @@ const Dashboard = () => {
 
     if (!respData) return;
 
-    console.log("svprintKot respData.data shape", {
-      hasData: !!respData?.data,
-      isArray: Array.isArray(respData?.data),
-      dataLength: Array.isArray(respData?.data) ? respData.data.length : null,
-      data0IsArray: Array.isArray(respData?.data?.[0]),
-      data0Len: Array.isArray(respData?.data?.[0]) ? respData.data[0].length : null,
-    });
-
     const groups = normalizePrinterGroups(respData);
     if (groups.length === 0) return;
 
-    console.log(
-      "KOT printer groups",
-      groups.map((g) => ({ printerName: g.printerName, count: g.items.length })),
-    );
     setPrinterGroups(groups);
     setPrinterJobs(
       groups.map((g) => ({
@@ -353,7 +350,10 @@ const Dashboard = () => {
       });
 
       try {
-        await printToPrinter({ printerName: group.printerName, orderItems: group.items });
+        await printToPrinter({
+          printerName: group.printerName,
+          orderItems: group.items,
+        });
         successMap.set(group.groupId, true);
         updateJob(group.groupId, {
           status: "printed",
@@ -561,10 +561,10 @@ const Dashboard = () => {
                   {printerJobs.map((job) => (
                     <View key={job.groupId} style={styles.printerRow}>
                       <View style={styles.printerRowHeader}>
-                        <Text style={styles.printerName}>{job.printerName}</Text>
-                        <Text style={styles.printerStatus}>
-                          {job.status}
+                        <Text style={styles.printerName}>
+                          {job.printerName}
                         </Text>
+                        <Text style={styles.printerStatus}>{job.status}</Text>
                       </View>
 
                       {!!job.message && (

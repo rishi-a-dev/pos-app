@@ -59,7 +59,6 @@ export const printToPrinter = ({
 
     socket.on("connect", () => {
       try {
-        console.log("Printing to printer", host, "items", products.length);
         socket.write("\x1b\x40");
 
         const dateTime = new Date().toLocaleString();
