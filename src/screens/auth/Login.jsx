@@ -25,6 +25,7 @@ const Login = () => {
   const [cameraVisible, setCameraVisible] = React.useState(false);
   const [username, setUsername] = React.useState("");
   const [password, setPassword] = React.useState("");
+  const [isLoggingIn, setIsLoggingIn] = React.useState(false);
   const isLandscape = useOrientation();
   const navigation = useNavigation();
   const { showToast } = useToast();
@@ -112,25 +113,32 @@ const Login = () => {
   };
 
   const handleLogin = async () => {
+    if (isLoggingIn) return; // prevent double-tap / repeated requests
+    setIsLoggingIn(true);
+
     const body = {
       username: username,
       password: password,
       branch: dbData.branchData,
       company: dbData.companyData,
     };
-    const data = await fetchData(`auth/login`, "post", body);
-    if (data?.token) {
-      setDbData({
-        ...dbData,
-        token: data.token,
-        adminname: data.users.firstName,
-        username: username,
-      });
-      setUsername("");
-      setPassword("");
-      navigation.navigate("drawer", { screen: "employeeselection" });
-    } else {
-      showToast({ message: "Please try again", type: "warn" });
+    try {
+      const data = await fetchData(`auth/login`, "post", body);
+      if (data?.token) {
+        setDbData({
+          ...dbData,
+          token: data.token,
+          adminname: data.users.firstName,
+          username: username,
+        });
+        setUsername("");
+        setPassword("");
+        navigation.navigate("drawer", { screen: "employeeselection" });
+      } else {
+        showToast({ message: "Please try again", type: "warn" });
+      }
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -184,8 +192,14 @@ const Login = () => {
                   autoCapitalize="none"
                 />
               </View>
-              <TouchableOpacity style={styles.button} onPress={handleLogin}>
-                <Text style={styles.buttonText}>Login</Text>
+              <TouchableOpacity
+                style={[styles.button, isLoggingIn && { opacity: 0.6 }]}
+                onPress={handleLogin}
+                disabled={isLoggingIn}
+              >
+                <Text style={styles.buttonText}>
+                  {isLoggingIn ? "Logging in..." : "Login"}
+                </Text>
               </TouchableOpacity>
             </View>
           ) : (

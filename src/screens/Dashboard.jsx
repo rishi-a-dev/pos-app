@@ -62,6 +62,7 @@ const Dashboard = () => {
   const increaseQuantity = useAppStore((state) => state.increaseItemQuantity);
   const removeItem = useAppStore((state) => state.removeItem);
   const removeOrder = useAppStore((state) => state.removeOrder);
+  const removeAllItems = useAppStore((state) => state.removeAllItems);
   const clearOrders = useAppStore((state) => state.clearOrders);
   const waiterList = useAppStore((state) => state.waiters);
   const selectedWaiter = useAppStore((state) => state.waiter);
@@ -177,32 +178,48 @@ const Dashboard = () => {
 
     return await new Promise((resolve) => {
       let resolved = false;
+      const TIMEOUT_MS = 3000;
+      const TIMEOUT_ERROR_MESSAGE =
+        "Connection issue: printer not reachable (timeout).";
       const socket = TcpSocket.createConnection({
         host,
         port: printerPort,
-        timeout: 3000,
+        timeout: TIMEOUT_MS,
       });
-
-      socket.on("connect", () => {
-        resolved = true;
-        socket.end();
-        resolve({ ok: true });
-      });
-
-      socket.on("error", (err) => {
+      const timeoutHandle = setTimeout(() => {
         if (resolved) return;
         resolved = true;
         socket.end();
-        resolve({
+        resolve({ ok: false, error: TIMEOUT_ERROR_MESSAGE });
+      }, TIMEOUT_MS + 500);
+
+      const resolveOnce = (payload) => {
+        if (resolved) return;
+        resolved = true;
+        clearTimeout(timeoutHandle);
+        resolve(payload);
+      };
+
+      socket.on("connect", () => {
+        socket.end();
+        resolveOnce({ ok: true });
+      });
+
+      socket.on("error", (err) => {
+        socket.end();
+        resolveOnce({
           ok: false,
           error: String(err?.message ?? err ?? "Connection failed"),
         });
       });
 
       socket.on("close", () => {
-        if (resolved) return;
-        resolved = true;
-        resolve({ ok: false, error: "Connection closed" });
+        resolveOnce({ ok: false, error: "Connection closed" });
+      });
+
+      socket.on("timeout", () => {
+        socket.end();
+        resolveOnce({ ok: false, error: TIMEOUT_ERROR_MESSAGE });
       });
     });
   };
@@ -383,8 +400,18 @@ const Dashboard = () => {
     if (allOk) finalizeIfAllPrinted();
   };
 
-  const toggleModal = () => {
+  const handleClosePrinterStatus = () => {
+    if (orderList[selectedIndex]) {
+      removeAllItems(selectedIndex);
+      removeOrder(selectedIndex);
+    }
+    setTable(null);
+    setPrinterJobs([]);
+    setPrinterGroups([]);
     setModalVisible(false);
+    if (orderList.length <= 1) {
+      navigation.navigate("table");
+    }
   };
 
   useEffect(() => {
@@ -602,53 +629,49 @@ const Dashboard = () => {
           transparent={true}
           statusBarTranslucent
           visible={isModalVisible}
-          onRequestClose={toggleModal}
+          onRequestClose={() => {}}
         >
-          <TouchableWithoutFeedback onPress={toggleModal}>
-            <View style={styles.modalContainer}>
-              <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Printer Status</Text>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Printer Status</Text>
 
-                <ScrollView style={styles.printerList}>
-                  {printerJobs.map((job) => (
-                    <View key={job.groupId} style={styles.printerRow}>
-                      <View style={styles.printerRowHeader}>
-                        <Text style={styles.printerName}>
-                          {job.printerName}
-                        </Text>
-                        <Text style={styles.printerStatus}>{job.status}</Text>
-                      </View>
-
-                      {!!job.message && (
-                        <Text style={styles.printerMessage}>{job.message}</Text>
-                      )}
-                      {!!job.error && (
-                        <Text style={styles.printerError}>{job.error}</Text>
-                      )}
-
-                      {job.status === "failed" && (
-                        <TouchableOpacity
-                          style={styles.retryButton}
-                          activeOpacity={0.8}
-                          onPress={() => handleRetryPrinter(job.groupId)}
-                        >
-                          <Text style={styles.retryButtonText}>Retry</Text>
-                        </TouchableOpacity>
-                      )}
+              <ScrollView style={styles.printerList}>
+                {printerJobs.map((job) => (
+                  <View key={job.groupId} style={styles.printerRow}>
+                    <View style={styles.printerRowHeader}>
+                      <Text style={styles.printerName}>{job.printerName}</Text>
+                      <Text style={styles.printerStatus}>{job.status}</Text>
                     </View>
-                  ))}
-                </ScrollView>
 
-                <TouchableOpacity
-                  style={styles.closeButton}
-                  activeOpacity={0.8}
-                  onPress={toggleModal}
-                >
-                  <Text style={styles.closeButtonText}>Close</Text>
-                </TouchableOpacity>
-              </View>
+                    {!!job.message && (
+                      <Text style={styles.printerMessage}>{job.message}</Text>
+                    )}
+                    {!!job.error && (
+                      <Text style={styles.printerError}>{job.error}</Text>
+                    )}
+
+                    {job.status === "failed" && (
+                      <TouchableOpacity
+                        style={styles.retryButton}
+                        activeOpacity={0.8}
+                        onPress={() => handleRetryPrinter(job.groupId)}
+                      >
+                        <Text style={styles.retryButtonText}>Retry</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ))}
+              </ScrollView>
+
+              <TouchableOpacity
+                style={styles.closeButton}
+                activeOpacity={0.8}
+                onPress={handleClosePrinterStatus}
+              >
+                <Text style={styles.closeButtonText}>Close</Text>
+              </TouchableOpacity>
             </View>
-          </TouchableWithoutFeedback>
+          </View>
         </Modal>
         <OrderUpdate
           isOpen={isOpen}
