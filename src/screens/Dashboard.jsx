@@ -287,17 +287,18 @@ const Dashboard = () => {
     finalizeMetaRef.current = { initialOrderListLength, selectedIndex };
 
     const body = {
-      id: null,
+      id: currentOrder.table.transactionID ?? null,
       date: new Date().toISOString(),
       items: currentOrder.items,
     };
 
+    const chairName = currentOrder.table.chairName ?? "0";
+
     const respData = await fetchData(
-      `api/v1/restaurent/svprintKot?sectionId=${currentOrder.section.id}&tableId=${currentOrder.table.id}&tableName=${currentOrder.table.tableName}&salesManId=${selectedWaiter.id}`,
+      `api/v1/restaurent/svprintKot?sectionId=${currentOrder.section.id}&tableId=${currentOrder.table.id}&tableName=${currentOrder.table.tableName}&salesManId=${selectedWaiter.id}&chairName=${chairName}`,
       "post",
       body,
     );
-
     if (!respData) return;
 
     const groups = normalizePrinterGroups(respData);

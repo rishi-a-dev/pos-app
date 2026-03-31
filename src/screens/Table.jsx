@@ -1,7 +1,13 @@
-import React, { useEffect, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import * as Haptics from "expo-haptics";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 
 import Theme from "../theme/Theme";
 import { useAppStore } from "../stores";
@@ -17,6 +23,7 @@ const Table = () => {
   const [orderList, setOrderList] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [tableAdditionalPopup, setTableAdditionalPopup] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const sectionList = useAppStore((state) => state.sections);
   const setSectionList = useAppStore((state) => state.setSectionsList);
@@ -38,7 +45,6 @@ const Table = () => {
       `api/v1/restaurent/fillTable?sectionId=${id}`,
     );
     if (respData) {
-      console.log("respData", respData.data);
       setTableList(respData.data);
     }
   };
@@ -57,6 +63,15 @@ const Table = () => {
       getTableList(selectedSection?.id);
     }
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      getSectionList();
+      if (selectedSection?.id) {
+        getTableList(selectedSection.id);
+      }
+    }, [selectedSection?.id]),
+  );
 
   const handleSection = (section) => {
     setSection(section);
@@ -141,6 +156,18 @@ const Table = () => {
     setModalVisible(false);
   };
 
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await getSectionList();
+      if (selectedSection?.id) {
+        await getTableList(selectedSection.id);
+      }
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <AppBar />
@@ -172,14 +199,32 @@ const Table = () => {
         )}
       </View>
       {tableList.length === 0 ? (
-        <View style={styles.emptyView}>
-          <Text style={styles.emptyText}>No tables found.</Text>
-          <Text style={styles.emptyText}>
-            Please choose a section to continue.
-          </Text>
-        </View>
+        <ScrollView
+          contentContainerStyle={styles.emptyScrollContainer}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+            />
+          }
+        >
+          <View style={styles.emptyView}>
+            <Text style={styles.emptyText}>No tables found.</Text>
+            <Text style={styles.emptyText}>
+              Please choose a section to continue.
+            </Text>
+          </View>
+        </ScrollView>
       ) : (
-        <ScrollView contentContainerStyle={styles.contentContainer}>
+        <ScrollView
+          contentContainerStyle={styles.contentContainer}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+            />
+          }
+        >
           {tableList?.map((table, index) => {
             // Table is queued when there is any active order for same table/chair.
             // Chair can be null/undefined for non-chair tables, so normalize it.
@@ -190,7 +235,8 @@ const Table = () => {
                 (order?.table?.chairName ?? "") === normalizedChairName,
             );
             const isKotTable =
-              table?.transactionID !== null && table?.transactionID !== undefined;
+              table?.transactionID !== null &&
+              table?.transactionID !== undefined;
 
             return (
               <TableCard
@@ -245,6 +291,9 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+  },
+  emptyScrollContainer: {
+    flexGrow: 1,
   },
   emptyText: {
     ...Theme.typography.H5,
