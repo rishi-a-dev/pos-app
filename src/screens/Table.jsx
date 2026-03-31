@@ -63,7 +63,7 @@ const Table = () => {
       `api/v1/restaurent/fillTable?sectionId=${id}`,
     );
     if (respData) {
-      setTableList(respData.data);
+      setTableList(Array.isArray(respData?.data) ? respData.data : []);
     }
   };
 
@@ -100,12 +100,19 @@ const Table = () => {
   };
 
   const handleNewKOT = (table) => {
-    const existingChairs = tableList
-      .filter((t) => t.tableName === table.tableName)
-      .map((t) => t.chairName)
-      .filter((name) => name !== null)
-      // .filter(Boolean) // Ensure non-null chair names
-      .map(Number); // Convert chair names to numbers for comparison
+    const matchingTables = mergedTableList.filter(
+      (t) => t.tableName === table.tableName,
+    );
+    const hasUnnamedChair = matchingTables.some(
+      (t) => t?.chairName === null || t?.chairName === undefined || t?.chairName === "",
+    );
+    const existingChairs = matchingTables
+      .map((t) => Number(t?.chairName))
+      .filter((chairNo) => Number.isFinite(chairNo) && chairNo > 0);
+    // A base single-chair row often has empty chairName; treat it as chair 1.
+    if (hasUnnamedChair && !existingChairs.includes(1)) {
+      existingChairs.push(1);
+    }
     // Find the next available chair number
     let nextChairNumber = 1;
     while (existingChairs.includes(nextChairNumber)) {
@@ -118,7 +125,8 @@ const Table = () => {
       chairName: nextChairNumber.toString().padStart(2, "0"),
     };
 
-    setTableList([...tableList, newTable]);
+    const nextTableList = [...(Array.isArray(tableList) ? tableList : []), newTable];
+    setTableList(nextTableList);
     handleOrders(newTable);
   };
 
@@ -246,8 +254,41 @@ const Table = () => {
     handleOrders(selectedTable);
   };
 
+  const mergedTableList = useMemo(() => {
+    const safeTableList = Array.isArray(tableList) ? tableList : [];
+    const selectedSectionId = selectedSection?.id;
+    const queuedTablesForSection = queuedOrders
+      .filter((order) => {
+        const orderSectionId = order?.section?.id ?? order?.table?.sectionId;
+        return selectedSectionId ? orderSectionId === selectedSectionId : true;
+      })
+      .map((order) => order?.table)
+      .filter(Boolean);
+
+    if (!queuedTablesForSection.length) {
+      return safeTableList;
+    }
+
+    const seen = new Set(
+      safeTableList.map(
+        (table) =>
+          `${table?.tableName || ""}|${table?.id || ""}|${table?.chairName ?? ""}`,
+      ),
+    );
+    const queuedTableEntries = queuedTablesForSection.filter((table) => {
+      const key = `${table?.tableName || ""}|${table?.id || ""}|${table?.chairName ?? ""}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+
+    return [...safeTableList, ...queuedTableEntries];
+  }, [queuedOrders, selectedSection?.id, tableList]);
+
   const tableGroups = useMemo(() => {
-    const groupedMap = tableList.reduce((acc, table) => {
+    const groupedMap = mergedTableList.reduce((acc, table) => {
       const key = table?.tableName || `table-${table?.id}`;
       if (!acc[key]) {
         acc[key] = [];
@@ -263,7 +304,7 @@ const Table = () => {
         String(a?.chairName || "").localeCompare(String(b?.chairName || "")),
       ),
     }));
-  }, [tableList]);
+  }, [mergedTableList]);
 
   const selectedTableGroup = useMemo(() => {
     if (!selectedTableGroupKey) {
@@ -326,7 +367,7 @@ const Table = () => {
             </ScrollView>
           )}
         </View>
-        {tableList.length === 0 ? (
+        {mergedTableList.length === 0 ? (
           <ScrollView
             contentContainerStyle={styles.emptyScrollContainer}
             refreshControl={
@@ -367,9 +408,7 @@ const Table = () => {
                   chair?.transactionID !== null &&
                   chair?.transactionID !== undefined,
               );
-              const chairCount = tableGroup.chairs.filter(
-                (chair) => chair?.chairName,
-              ).length;
+              const chairCount = tableGroup.chairs.length;
               const hasMultipleChairs = chairCount > 1;
               const primaryChair = tableGroup.chairs[0];
 
@@ -442,7 +481,8 @@ const Table = () => {
             <ScrollView
               style={styles.chairScroll}
               contentContainerStyle={styles.chairGrid}
-              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+              showsVerticalScrollIndicator={false}
             >
               {(selectedTableGroup?.chairs || []).map((chair, index) => {
                 const isKotChair =
@@ -609,7 +649,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   chairSheet: {
-    maxHeight: "75%",
+    height: "75%",
     width: "100%",
     alignItems: "stretch",
     justifyContent: "flex-start",
@@ -658,7 +698,7 @@ const styles = StyleSheet.create({
   },
   chairListBody: {
     flex: 1,
-    minHeight: 120,
+    minHeight: 160,
   },
   chairScroll: {
     flex: 1,
@@ -669,6 +709,7 @@ const styles = StyleSheet.create({
     columnGap: 8,
     rowGap: 8,
     paddingVertical: 4,
+    paddingBottom: 16,
   },
   chairChip: {
     width: "48%",

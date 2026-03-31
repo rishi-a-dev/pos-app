@@ -49,7 +49,7 @@ export const OrderList = ({
   };
 
   const animatedTranslateX = React.useRef(
-    new Animated.Value(showRightDrawer ? 0 : SCREEN_WIDTH * 0.75)
+    new Animated.Value(showRightDrawer ? 0 : SCREEN_WIDTH * 0.75),
   ).current;
 
   React.useEffect(() => {
@@ -66,7 +66,7 @@ export const OrderList = ({
   const calculateTotalPrice = () =>
     orderedItems?.items?.reduce(
       (total, item) => total + item?.rate * item?.qty,
-      0
+      0,
     );
 
   const clearAllOrders = () => {

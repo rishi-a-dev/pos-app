@@ -76,44 +76,46 @@ export const OrderTableList = ({
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        horizontal
-        style={styles.scrollContainer}
-        contentContainerStyle={styles.tableContainer}
-        showsHorizontalScrollIndicator={false}
-      >
-        {tableList?.map((table, index) => (
-          <TouchableOpacity
-            key={index.toString()}
-            ref={(ref) => (buttonRefs.current[index] = ref)}
-            style={[
-              styles.tableView,
-              {
-                width: isSmallScreen ? 112 : 132,
-                backgroundColor:
-                  selectedIndex === index
-                    ? Theme.colors.background.primary.default
-                    : Theme.colors.background.primary.disabled,
-              },
-            ]}
-            onPress={() => setSelectedIndex(index)}
-            onPressIn={() => handleDoubleTap(index)}
-          >
-            <Text
+      <View style={styles.listRow}>
+        <ScrollView
+          horizontal
+          style={styles.scrollContainer}
+          contentContainerStyle={styles.tableContainer}
+          showsHorizontalScrollIndicator={false}
+        >
+          {tableList?.map((table, index) => (
+            <TouchableOpacity
+              key={index.toString()}
+              ref={(ref) => (buttonRefs.current[index] = ref)}
               style={[
-                styles.tableText,
+                styles.tableView,
                 {
-                  color:
+                  width: isSmallScreen ? 112 : 132,
+                  backgroundColor:
                     selectedIndex === index
-                      ? Theme.colors.text.secondary.default
-                      : Theme.colors.text.primary.disabled,
+                      ? Theme.colors.background.primary.default
+                      : Theme.colors.background.primary.disabled,
                 },
               ]}
+              onPress={() => setSelectedIndex(index)}
+              onPressIn={() => handleDoubleTap(index)}
             >
-              Table {table?.table?.tableName} - {table?.table?.chairName}
-            </Text>
-          </TouchableOpacity>
-        ))}
+              <Text
+                style={[
+                  styles.tableText,
+                  {
+                    color:
+                      selectedIndex === index
+                        ? Theme.colors.text.secondary.default
+                        : Theme.colors.text.primary.disabled,
+                  },
+                ]}
+              >
+                Table {table?.table?.tableName} - {table?.table?.chairName}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
         <TouchableOpacity
           style={styles.addButton}
           onPress={() => navigation.navigate("table")}
@@ -122,7 +124,7 @@ export const OrderTableList = ({
             <Add color="#000" size={48} border={0.8} showCircle={false} />
           </Text>
         </TouchableOpacity>
-      </ScrollView>
+      </View>
       {showRemoveTable && (
         <Portal>
           <TouchableWithoutFeedback onPress={handleBackdropPress}>
@@ -165,6 +167,13 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     width: "100%",
+    flex: 1,
+  },
+  listRow: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    columnGap: 10,
   },
   tableContainer: {
     alignItems: "center",
@@ -193,10 +202,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderStyle: "dashed",
     borderWidth: 1,
-    marginLeft: 10,
     marginRight: 4,
     borderColor: Theme.colors.stroke.secondary,
     overflow: "hidden",
+    borderTopWidth: Theme.border.width.normal,
+    borderTopColor: Theme.colors.stroke.secondary,
   },
   addButtonText: {
     ...Theme.typography.H1,
