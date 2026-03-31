@@ -13,14 +13,25 @@ export const TableCard = ({
   isKotTable = false,
   handleTable,
   handleLongPress,
+  title,
+  subtitle,
+  onPress,
+  onLongPress,
+  selected,
 }) => {
   const { width } = useWindowDimensions();
   const isSmallScreen = width < 420;
   const cardWidth = isSmallScreen ? "48%" : 172;
 
-  const isSelected =
+  const isTableSelected =
     selectedTable?.id === table.id &&
     (selectedTable?.chairName ?? "") === (table?.chairName ?? "");
+  const isSelected = selected ?? isTableSelected;
+  const cardTitle =
+    title ?? `Table ${table.tableName} ${table.chairName ? `- ${table.chairName}` : ""}`;
+
+  const onCardPress = onPress ?? (() => handleTable?.(table));
+  const onCardLongPress = onLongPress ?? (() => handleLongPress?.(table));
 
   return (
     <TouchableOpacity
@@ -42,9 +53,9 @@ export const TableCard = ({
             : Theme.colors.stroke.secondary,
         },
       ]}
-      onPress={() => handleTable(table)}
+      onPress={onCardPress}
       delayLongPress={500}
-      onLongPress={() => handleLongPress(table)}
+      onLongPress={onCardLongPress}
     >
       <Text
         style={[
@@ -57,8 +68,26 @@ export const TableCard = ({
           },
         ]}
       >
-        Table {table.tableName} {table.chairName && `- ${table.chairName}`}
+        {cardTitle}
       </Text>
+      {subtitle ? (
+        <Text
+          style={[
+            styles.subtitleText,
+            {
+              color: isSelected
+                ? Theme.colors.text.secondary.default
+                : isQueued
+                  ? Theme.colors.text.primary.default
+                  : isKotTable
+                    ? Theme.colors.text.primary.default
+                    : Theme.colors.text.primary.disabled,
+            },
+          ]}
+        >
+          {subtitle}
+        </Text>
+      ) : null}
       {isKotTable && !isSelected && <Text style={styles.kotText}>KOT</Text>}
       {isQueued && !isSelected && <Text style={styles.queuedText}>Queued</Text>}
     </TouchableOpacity>
@@ -77,6 +106,11 @@ const styles = StyleSheet.create({
   },
   tableTitle: {
     textAlign: "center",
+  },
+  subtitleText: {
+    ...Theme.typography.H6,
+    color: Theme.colors.text.primary.disabled,
+    marginTop: 2,
   },
   queuedText: {
     ...Theme.typography.H6,

@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import Animated, { SlideInDown, SlideOutDown } from "react-native-reanimated";
+import { Portal } from "@gorhom/portal";
 
 import Theme from "../../theme/Theme";
 import { Close } from "../../assets/icons/Close";
@@ -18,48 +19,53 @@ const TableAdditionalPopup = ({
   showAddItemBtn = true,
   handleNewKOT,
   handleAddItems,
+  addItemText = "Add Item",
+  secondaryActionText = "New KOT",
+  title = "Options",
 }) => {
   const { width, height } = Dimensions.get("screen");
   return (
     show && (
-      <TouchableWithoutFeedback onPress={tooglePopup}>
-        <Animated.View
-          entering={SlideInDown.duration(500)}
-          exiting={SlideOutDown.duration(300)}
-          style={[styles.backdrop, { width: width, height: height }]}
-        >
-          <View style={styles.card}>
-            <View style={styles.header}>
-              <Text style={styles.headerText}>Options</Text>
-              <TouchableOpacity onPress={tooglePopup}>
-                <Close size={Theme.typography.H1.fontSize} />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.contentContainer}>
-              {showAddItemBtn && (
+      <Portal>
+        <TouchableWithoutFeedback onPress={tooglePopup}>
+          <Animated.View
+            entering={SlideInDown.duration(500)}
+            exiting={SlideOutDown.duration(300)}
+            style={[styles.backdrop, { width: width, height: height }]}
+          >
+            <View style={styles.card}>
+              <View style={styles.header}>
+                <Text style={styles.headerText}>{title}</Text>
+                <TouchableOpacity onPress={tooglePopup}>
+                  <Close size={Theme.typography.H1.fontSize} />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.contentContainer}>
+                {showAddItemBtn && (
+                  <TouchableOpacity
+                    style={[
+                      styles.button,
+                      { backgroundColor: Theme.colors.background.accents.green },
+                    ]}
+                    onPress={handleAddItems}
+                  >
+                    <Text style={styles.buttonText}>{addItemText}</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
                   style={[
                     styles.button,
-                    { backgroundColor: Theme.colors.background.accents.green },
+                    { backgroundColor: Theme.colors.background.primary.default },
                   ]}
-                  onPress={handleAddItems}
+                  onPress={handleNewKOT}
                 >
-                  <Text style={styles.buttonText}>Add Item</Text>
+                  <Text style={styles.buttonText}>{secondaryActionText}</Text>
                 </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={[
-                  styles.button,
-                  { backgroundColor: Theme.colors.background.primary.default },
-                ]}
-                onPress={handleNewKOT}
-              >
-                <Text style={styles.buttonText}>New KOT</Text>
-              </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        </Animated.View>
-      </TouchableWithoutFeedback>
+          </Animated.View>
+        </TouchableWithoutFeedback>
+      </Portal>
     )
   );
 };
@@ -72,6 +78,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     justifyContent: "center",
     alignItems: "center",
+    zIndex: 2000,
   },
   card: {
     width: 312,

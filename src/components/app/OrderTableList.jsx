@@ -43,7 +43,7 @@ export const OrderTableList = ({
         (x, y, width, height, pageX, pageY) => {
           setButtonPosition({ x: pageX, y: pageY });
           setShowRemoveTable(true);
-        }
+        },
       );
     } else {
       lastTap = now;
@@ -172,6 +172,7 @@ const styles = StyleSheet.create({
     borderTopWidth: Theme.border.width.normal,
     borderTopColor: Theme.colors.stroke.secondary,
     columnGap: 0,
+    paddingRight: 16,
   },
   tableView: {
     minWidth: 120,
@@ -193,6 +194,7 @@ const styles = StyleSheet.create({
     borderStyle: "dashed",
     borderWidth: 1,
     marginLeft: 10,
+    marginRight: 4,
     borderColor: Theme.colors.stroke.secondary,
     overflow: "hidden",
   },
