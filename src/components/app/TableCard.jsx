@@ -3,43 +3,61 @@ import { StyleSheet, Text, TouchableOpacity } from "react-native";
 
 import Theme from "../../theme/Theme";
 
+const KOT_BG = "#DCEAFF";
+const KOT_BORDER = "#9FC0FF";
+
 export const TableCard = ({
   table,
   selectedTable,
+  isQueued = false,
+  isKotTable = false,
   handleTable,
   handleLongPress,
-}) => (
-  <TouchableOpacity
-    style={[
-      styles.tableCard,
-      {
-        backgroundColor:
-          selectedTable?.id === table.id &&
-          selectedTable?.chairName === table.chairName
-            ? Theme.colors.background.primary.default
-            : Theme.colors.background.primary.muted,
-      },
-    ]}
-    onPress={() => handleTable(table)}
-    delayLongPress={500}
-    onLongPress={() => handleLongPress(table)}
-  >
-    <Text
+}) => {
+  const isSelected =
+    selectedTable?.id === table.id &&
+    (selectedTable?.chairName ?? "") === (table?.chairName ?? "");
+
+  return (
+    <TouchableOpacity
       style={[
-        Theme.typography.H5,
+        styles.tableCard,
         {
-          color:
-            selectedTable?.id === table.id &&
-            selectedTable?.chairName === table.chairName
-              ? Theme.colors.text.secondary.default
-              : Theme.colors.text.primary.default,
+          backgroundColor: isSelected
+            ? Theme.colors.background.primary.default
+            : isQueued
+              ? Theme.colors.background.accents.brown
+              : isKotTable
+                ? KOT_BG
+              : Theme.colors.background.primary.muted,
+          borderColor: isQueued
+            ? Theme.colors.text.accents.default
+            : isKotTable
+              ? KOT_BORDER
+            : Theme.colors.stroke.secondary,
         },
       ]}
+      onPress={() => handleTable(table)}
+      delayLongPress={500}
+      onLongPress={() => handleLongPress(table)}
     >
-      Table {table.tableName} {table.chairName && `- ${table.chairName}`}
-    </Text>
-  </TouchableOpacity>
-);
+      <Text
+        style={[
+          Theme.typography.H5,
+          {
+            color: isSelected
+              ? Theme.colors.text.secondary.default
+              : Theme.colors.text.primary.default,
+          },
+        ]}
+      >
+        Table {table.tableName} {table.chairName && `- ${table.chairName}`}
+      </Text>
+      {isKotTable && !isSelected && <Text style={styles.kotText}>KOT</Text>}
+      {isQueued && !isSelected && <Text style={styles.queuedText}>Queued</Text>}
+    </TouchableOpacity>
+  );
+};
 
 const styles = StyleSheet.create({
   tableCard: {
@@ -49,5 +67,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: Theme.border.width.normal,
     borderColor: Theme.colors.stroke.secondary,
+  },
+  queuedText: {
+    ...Theme.typography.H6,
+    color: Theme.colors.text.primary.default,
+    marginTop: 4,
+  },
+  kotText: {
+    ...Theme.typography.H6,
+    color: Theme.colors.text.accents.default,
+    marginTop: 2,
   },
 });

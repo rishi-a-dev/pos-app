@@ -64,6 +64,7 @@ const Dashboard = () => {
   const selectedWaiter = useAppStore((state) => state.waiter);
   const setWaiter = useAppStore((state) => state.setWaiter);
   const setTable = useAppStore((state) => state.setTable);
+  const selectedTable = useAppStore((state) => state.table);
 
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -444,6 +445,21 @@ const Dashboard = () => {
       }, 500);
     }
   }, []);
+
+  useEffect(() => {
+    if (!selectedTable || orderList.length === 0) return;
+
+    const matchedOrderIndex = orderList.findIndex(
+      (order) =>
+        order?.table?.id === selectedTable?.id &&
+        (order?.table?.chairName ?? "") === (selectedTable?.chairName ?? ""),
+    );
+
+    if (matchedOrderIndex >= 0) {
+      setSelectedIndex(matchedOrderIndex);
+    }
+  }, [selectedTable, orderList]);
+
   const handleCategoryFilter = (category) => {
     setSelectedCategory(category);
   };

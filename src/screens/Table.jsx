@@ -27,6 +27,7 @@ const Table = () => {
   const setSection = useAppStore((state) => state.setSection);
   const setTable = useAppStore((state) => state.setTable);
   const addNewOrder = useAppStore((state) => state.addNewOrder);
+  const queuedOrders = useAppStore((state) => state.orderList);
 
   const navigation = useNavigation();
   const isLandscape = useOrientation();
@@ -34,9 +35,10 @@ const Table = () => {
 
   const getTableList = async (id) => {
     const respData = await fetchData(
-      `api/v1/restaurent/fillTable?sectionId=${id}`
+      `api/v1/restaurent/fillTable?sectionId=${id}`,
     );
     if (respData) {
+      console.log("respData", respData.data);
       setTableList(respData.data);
     }
   };
@@ -85,7 +87,16 @@ const Table = () => {
   };
 
   const handleTable = (table) => {
-    if (table.id === selectedTable?.id) {
+    const isQueued = queuedOrders.some(
+      (order) =>
+        order?.table?.id === table?.id &&
+        (order?.table?.chairName ?? "") === (table?.chairName ?? ""),
+    );
+    const isKotTable =
+      table?.transactionID !== null && table?.transactionID !== undefined;
+
+    if (isQueued || isKotTable) {
+      setTable(table);
       setTableAdditionalPopup(true);
     } else {
       handleOrders(table);
@@ -93,21 +104,30 @@ const Table = () => {
   };
 
   const handleOrders = (table) => {
-    setTable(table);
-    const newOrder = {
-      section: selectedSection,
-      table: table,
-      items: [],
-    };
+    const existingOrder = queuedOrders.find(
+      (order) =>
+        order?.table?.id === table?.id &&
+        (order?.table?.chairName ?? "") === (table?.chairName ?? ""),
+    );
 
-    addNewOrder(newOrder);
+    setTable(table);
     setTableAdditionalPopup(false);
+
+    if (!existingOrder) {
+      const newOrder = {
+        section: selectedSection,
+        table: table,
+        items: [],
+      };
+      addNewOrder(newOrder);
+    }
+
     navigation.navigate("dashboard");
   };
 
   const handleLongPress = async (table) => {
     const respData = await fetchData(
-      `api/v1/restaurent/getItem?transId=${table.transactionID}`
+      `api/v1/restaurent/getItem?transId=${table.transactionID}`,
     );
     if (respData?.data?.length > 0) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft);
@@ -160,15 +180,30 @@ const Table = () => {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.contentContainer}>
-          {tableList?.map((table, index) => (
-            <TableCard
-              key={index.toString()}
-              table={table}
-              selectedTable={selectedTable}
-              handleTable={handleTable}
-              handleLongPress={handleLongPress}
-            />
-          ))}
+          {tableList?.map((table, index) => {
+            // Table is queued when there is any active order for same table/chair.
+            // Chair can be null/undefined for non-chair tables, so normalize it.
+            const normalizedChairName = table?.chairName ?? "";
+            const isQueued = queuedOrders.some(
+              (order) =>
+                order?.table?.id === table?.id &&
+                (order?.table?.chairName ?? "") === normalizedChairName,
+            );
+            const isKotTable =
+              table?.transactionID !== null && table?.transactionID !== undefined;
+
+            return (
+              <TableCard
+                key={index.toString()}
+                table={table}
+                selectedTable={selectedTable}
+                isQueued={isQueued}
+                isKotTable={isKotTable}
+                handleTable={handleTable}
+                handleLongPress={handleLongPress}
+              />
+            );
+          })}
         </ScrollView>
       )}
       <TableAdditionalPopup
