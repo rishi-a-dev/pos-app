@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, Text, TouchableOpacity } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, useWindowDimensions } from "react-native";
 
 import Theme from "../../theme/Theme";
 
@@ -14,6 +14,10 @@ export const TableCard = ({
   handleTable,
   handleLongPress,
 }) => {
+  const { width } = useWindowDimensions();
+  const isSmallScreen = width < 420;
+  const cardWidth = isSmallScreen ? "48%" : 172;
+
   const isSelected =
     selectedTable?.id === table.id &&
     (selectedTable?.chairName ?? "") === (table?.chairName ?? "");
@@ -22,6 +26,7 @@ export const TableCard = ({
     <TouchableOpacity
       style={[
         styles.tableCard,
+        { width: cardWidth },
         {
           backgroundColor: isSelected
             ? Theme.colors.background.primary.default
@@ -44,6 +49,7 @@ export const TableCard = ({
       <Text
         style={[
           Theme.typography.H5,
+          styles.tableTitle,
           {
             color: isSelected
               ? Theme.colors.text.secondary.default
@@ -61,12 +67,16 @@ export const TableCard = ({
 
 const styles = StyleSheet.create({
   tableCard: {
-    width: 172,
+    minHeight: 80,
     height: 80,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: Theme.border.width.normal,
     borderColor: Theme.colors.stroke.secondary,
+    paddingHorizontal: 8,
+  },
+  tableTitle: {
+    textAlign: "center",
   },
   queuedText: {
     ...Theme.typography.H6,

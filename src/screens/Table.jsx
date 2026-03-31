@@ -156,6 +156,7 @@ const Table = () => {
     const respData = await fetchData(
       `api/v1/restaurent/getItem?transId=${table.transactionID}`,
     );
+    console.log("respData", respData);
     if (respData?.data?.length > 0) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft);
       setOrderList(respData.data || []);
@@ -214,112 +215,112 @@ const Table = () => {
   return (
     <TouchableWithoutFeedback onPress={() => showMenu(false)}>
       <View style={styles.container}>
-      <AppBar onToggleSideMenu={toggleSideMenu} />
-      <SideMenu
-        isVisible={isMenuShown}
-        onLogout={handleLogout}
-        waiterList={waiterList}
-        setWaiter={setWaiter}
-        selectedWaiter={selectedWaiter}
-      />
-      <View style={styles.sectionView}>
-        <Text style={styles.sectionHeader}>Tables</Text>
-        {sectionList.length === 0 ? (
-          <View style={styles.emptyView}>
-            <Text style={styles.emptyText}>No section found.</Text>
-            <Text style={styles.emptyText}>
-              Please add section to continue.
-            </Text>
-          </View>
+        <AppBar onToggleSideMenu={toggleSideMenu} />
+        <SideMenu
+          isVisible={isMenuShown}
+          onLogout={handleLogout}
+          waiterList={waiterList}
+          setWaiter={setWaiter}
+          selectedWaiter={selectedWaiter}
+        />
+        <View style={styles.sectionView}>
+          <Text style={styles.sectionHeader}>Tables</Text>
+          {sectionList.length === 0 ? (
+            <View style={styles.emptyView}>
+              <Text style={styles.emptyText}>No section found.</Text>
+              <Text style={styles.emptyText}>
+                Please add section to continue.
+              </Text>
+            </View>
+          ) : (
+            <ScrollView
+              horizontal
+              contentContainerStyle={styles.horizontalScrollContainer}
+            >
+              {sectionList.map((section, index) => (
+                <SectionButton
+                  key={section.id}
+                  section={section}
+                  index={index}
+                  sectionListLength={sectionList.length}
+                  selectedSection={selectedSection}
+                  handleSection={handleSection}
+                />
+              ))}
+            </ScrollView>
+          )}
+        </View>
+        {tableList.length === 0 ? (
+          <ScrollView
+            contentContainerStyle={styles.emptyScrollContainer}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={handleRefresh}
+              />
+            }
+          >
+            <View style={styles.emptyView}>
+              <Text style={styles.emptyText}>No tables found.</Text>
+              <Text style={styles.emptyText}>
+                Please choose a section to continue.
+              </Text>
+            </View>
+          </ScrollView>
         ) : (
           <ScrollView
-            horizontal
-            contentContainerStyle={styles.horizontalScrollContainer}
-          >
-            {sectionList.map((section, index) => (
-              <SectionButton
-                key={section.id}
-                section={section}
-                index={index}
-                sectionListLength={sectionList.length}
-                selectedSection={selectedSection}
-                handleSection={handleSection}
+            contentContainerStyle={styles.contentContainer}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={handleRefresh}
               />
-            ))}
+            }
+          >
+            {tableList?.map((table, index) => {
+              // Table is queued when there is any active order for same table/chair.
+              // Chair can be null/undefined for non-chair tables, so normalize it.
+              const normalizedChairName = table?.chairName ?? "";
+              const isQueued = queuedOrders.some(
+                (order) =>
+                  order?.table?.id === table?.id &&
+                  (order?.table?.chairName ?? "") === normalizedChairName,
+              );
+              const isKotTable =
+                table?.transactionID !== null &&
+                table?.transactionID !== undefined;
+
+              return (
+                <TableCard
+                  key={index.toString()}
+                  table={table}
+                  selectedTable={selectedTable}
+                  isQueued={isQueued}
+                  isKotTable={isKotTable}
+                  handleTable={handleTable}
+                  handleLongPress={handleLongPress}
+                />
+              );
+            })}
           </ScrollView>
         )}
-      </View>
-      {tableList.length === 0 ? (
-        <ScrollView
-          contentContainerStyle={styles.emptyScrollContainer}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={handleRefresh}
-            />
-          }
-        >
-          <View style={styles.emptyView}>
-            <Text style={styles.emptyText}>No tables found.</Text>
-            <Text style={styles.emptyText}>
-              Please choose a section to continue.
-            </Text>
-          </View>
-        </ScrollView>
-      ) : (
-        <ScrollView
-          contentContainerStyle={styles.contentContainer}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={handleRefresh}
-            />
-          }
-        >
-          {tableList?.map((table, index) => {
-            // Table is queued when there is any active order for same table/chair.
-            // Chair can be null/undefined for non-chair tables, so normalize it.
-            const normalizedChairName = table?.chairName ?? "";
-            const isQueued = queuedOrders.some(
-              (order) =>
-                order?.table?.id === table?.id &&
-                (order?.table?.chairName ?? "") === normalizedChairName,
-            );
-            const isKotTable =
-              table?.transactionID !== null &&
-              table?.transactionID !== undefined;
-
-            return (
-              <TableCard
-                key={index.toString()}
-                table={table}
-                selectedTable={selectedTable}
-                isQueued={isQueued}
-                isKotTable={isKotTable}
-                handleTable={handleTable}
-                handleLongPress={handleLongPress}
-              />
-            );
-          })}
-        </ScrollView>
-      )}
-      <TableAdditionalPopup
-        show={tableAdditionalPopup}
-        tooglePopup={() => setTableAdditionalPopup(!tableAdditionalPopup)}
-        handleNewKOT={() => handleNewKOT(selectedTable)}
-        handleAddItems={() => handleOrders(selectedTable)}
-      />
-      <OrderItemList
-        isLandscape={isLandscape}
-        modalVisible={modalVisible}
-        data={orderList}
-        handleCloseModal={handleCloseModal}
-      />
-      <LogoutConfirm
-        isOpen={isLogoutConfirmOpen}
-        toggleSheet={toggleLogoutConfirm}
-        onConfirm={handleConfirmLogout}
-      />
+        <TableAdditionalPopup
+          show={tableAdditionalPopup}
+          tooglePopup={() => setTableAdditionalPopup(!tableAdditionalPopup)}
+          handleNewKOT={() => handleNewKOT(selectedTable)}
+          handleAddItems={() => handleOrders(selectedTable)}
+        />
+        <OrderItemList
+          isLandscape={isLandscape}
+          modalVisible={modalVisible}
+          data={orderList}
+          handleCloseModal={handleCloseModal}
+        />
+        <LogoutConfirm
+          isOpen={isLogoutConfirmOpen}
+          toggleSheet={toggleLogoutConfirm}
+          onConfirm={handleConfirmLogout}
+        />
       </View>
     </TouchableWithoutFeedback>
   );

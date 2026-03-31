@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   View,
   TouchableWithoutFeedback,
+  useWindowDimensions,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Portal } from "@gorhom/portal";
@@ -21,6 +22,8 @@ export const OrderTableList = ({
   selectedIndex,
   setSelectedIndex,
 }) => {
+  const { width } = useWindowDimensions();
+  const isSmallScreen = width < 420;
   const navigation = useNavigation();
   const [showRemoveTable, setShowRemoveTable] = useState(false);
   const [buttonPosition, setButtonPosition] = useState({ x: 0, y: 0 });
@@ -86,6 +89,7 @@ export const OrderTableList = ({
             style={[
               styles.tableView,
               {
+                width: isSmallScreen ? 112 : 132,
                 backgroundColor:
                   selectedIndex === index
                     ? Theme.colors.background.primary.default
@@ -170,13 +174,16 @@ const styles = StyleSheet.create({
     columnGap: 0,
   },
   tableView: {
-    width: 120,
+    minWidth: 120,
+    maxWidth: 180,
     height: 52,
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 8,
   },
   tableText: {
     ...Theme.typography.H6,
+    textAlign: "center",
   },
   addButton: {
     width: 52,

@@ -7,6 +7,7 @@ import {
   TouchableWithoutFeedback,
   View,
   FlatList,
+  useWindowDimensions,
 } from "react-native";
 
 import Theme from "../../theme/Theme";
@@ -18,6 +19,9 @@ export const OrderItemList = ({
   handleCloseModal,
   data,
 }) => {
+  const { width } = useWindowDimensions();
+  const modalWidth = isLandscape ? Math.min(width * 0.6, 560) : Math.min(width * 0.92, 520);
+
   return (
     <Modal
       animationType="slide"
@@ -32,7 +36,7 @@ export const OrderItemList = ({
               style={[
                 styles.itemModalContent,
                 {
-                  width: isLandscape ? "50%" : "70%",
+                  width: modalWidth,
                   maxHeight: isLandscape ? "80%" : "50%",
                 },
               ]}
@@ -44,10 +48,12 @@ export const OrderItemList = ({
                 </TouchableOpacity>
               </View>
               <View style={styles.contentContainer}>
-                <View style={[styles.contentRowView, { marginBottom: "2%" }]}>
+                <View style={styles.orderMetaRow}>
                   <Text
                     style={[
-                      Theme.typography.H3,
+                      Theme.typography.H4,
+                      styles.orderMetaText,
+                      styles.orderIdText,
                       { color: Theme.colors.background.accents.blue },
                     ]}
                   >
@@ -55,11 +61,13 @@ export const OrderItemList = ({
                   </Text>
                   <Text
                     style={[
-                      Theme.typography.H3,
+                      Theme.typography.H4,
+                      styles.orderMetaText,
                       { color: Theme.colors.background.accents.blue },
                     ]}
+                    numberOfLines={1}
                   >
-                    {data[0]?.time || ""}
+                    Time: {data[0]?.time || ""}
                   </Text>
                 </View>
                 <View
@@ -135,6 +143,23 @@ const styles = StyleSheet.create({
   contentContainer: {
     width: "100%",
     flexShrink: 1,
+  },
+  orderMetaRow: {
+    width: "100%",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "2%",
+    rowGap: 4,
+  },
+  orderMetaText: {
+    flexShrink: 1,
+    maxWidth: "100%",
+  },
+  orderIdText: {
+    width: "100%",
+    marginBottom: 2,
   },
   contentRowView: {
     width: "100%",
