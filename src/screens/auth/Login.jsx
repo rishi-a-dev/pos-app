@@ -126,6 +126,8 @@ const Login = () => {
         adminname: data.users.firstName,
         username: username,
       });
+      setUsername("");
+      setPassword("");
       navigation.navigate("drawer", { screen: "employeeselection" });
     } else {
       showToast({ message: "Please try again", type: "warn" });

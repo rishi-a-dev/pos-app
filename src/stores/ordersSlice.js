@@ -1,6 +1,12 @@
 export const ordersSlice = (set) => ({
   orderList: [],
 
+  // Clear all queued orders
+  clearOrders: () =>
+    set(() => ({
+      orderList: [],
+    })),
+
   // Update an order based on index
   updateOrder: (index, updatedOrder) =>
     set((state) => ({

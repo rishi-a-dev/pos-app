@@ -28,6 +28,7 @@ import OrderUpdate from "../components/app/OrderUpdate";
 import { useFetchData } from "../components/hooks/useFetchData";
 import { OrderTableList } from "../components/app/OrderTableList";
 import { createPostOrderItem } from "../components/utils/PostOrderItemStructure";
+import LogoutConfirm from "../components/app/LogoutConfirm";
 
 const Dashboard = () => {
   const navigation = useNavigation();
@@ -54,16 +55,20 @@ const Dashboard = () => {
   const [searchQuery, setSearchQuery] = useState("");
 
   const isOpen = useSharedValue(false);
+  const isLogoutConfirmOpen = useSharedValue(false);
   const { fetchData } = useFetchData();
   const orderList = useAppStore((state) => state.orderList);
   const addItem = useAppStore((state) => state.addItem);
   const increaseQuantity = useAppStore((state) => state.increaseItemQuantity);
   const removeItem = useAppStore((state) => state.removeItem);
   const removeOrder = useAppStore((state) => state.removeOrder);
+  const clearOrders = useAppStore((state) => state.clearOrders);
   const waiterList = useAppStore((state) => state.waiters);
   const selectedWaiter = useAppStore((state) => state.waiter);
   const setWaiter = useAppStore((state) => state.setWaiter);
   const setTable = useAppStore((state) => state.setTable);
+  const dbData = useAppStore((state) => state.dbData);
+  const setDbData = useAppStore((state) => state.setDbData);
   const selectedTable = useAppStore((state) => state.table);
 
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -501,6 +506,35 @@ const Dashboard = () => {
   const removeItemFromOrder = (item) => {
     removeItem(selectedIndex, item.uuid);
   };
+
+  const handleLogout = () => {
+    showMenu(false);
+    isLogoutConfirmOpen.value = true;
+  };
+
+  const handleConfirmLogout = () => {
+    isLogoutConfirmOpen.value = false;
+    // Local logout only: clear auth fields and return to login.
+    setDbData(
+      dbData
+        ? {
+            ...dbData,
+            token: null,
+            adminname: null,
+            username: null,
+          }
+        : null,
+    );
+    setWaiter(null);
+    setTable(null);
+    clearOrders();
+    navigation.navigate("auth", { screen: "login" });
+  };
+
+  const toggleLogoutConfirm = () => {
+    isLogoutConfirmOpen.value = !isLogoutConfirmOpen.value;
+  };
+
   return (
     <TouchableWithoutFeedback onPress={() => showMenu(false)}>
       <View style={styles.container}>
@@ -512,6 +546,7 @@ const Dashboard = () => {
         />
         <SideMenu
           isVisible={isMenuShown}
+          onLogout={handleLogout}
           waiterList={waiterList}
           setWaiter={setWaiter}
           selectedWaiter={selectedWaiter}
@@ -621,6 +656,11 @@ const Dashboard = () => {
           item={selectedItemForEdit}
           selectedIndex={selectedIndex}
           removeItemFromOrder={removeItemFromOrder}
+        />
+        <LogoutConfirm
+          isOpen={isLogoutConfirmOpen}
+          toggleSheet={toggleLogoutConfirm}
+          onConfirm={handleConfirmLogout}
         />
       </View>
     </TouchableWithoutFeedback>

@@ -4,26 +4,31 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { useSharedValue } from "react-native-reanimated";
 
 import Theme from "../theme/Theme";
 import { useAppStore } from "../stores";
 import { AppBar } from "../components/app/AppBar";
+import { SideMenu } from "../components/app/SideMenu";
 import { useFetchData } from "../components/hooks/useFetchData";
 import { OrderItemList } from "../components/app/OrderItemList";
 import { useOrientation } from "../components/context/OrientationContext";
 import { TableCard } from "../components/app/TableCard";
 import { SectionButton } from "../components/app/SectionButton";
 import TableAdditionalPopup from "../components/app/TableAdditionalPopup";
+import LogoutConfirm from "../components/app/LogoutConfirm";
 
 const Table = () => {
   const [orderList, setOrderList] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [tableAdditionalPopup, setTableAdditionalPopup] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isMenuShown, showMenu] = useState(false);
 
   const sectionList = useAppStore((state) => state.sections);
   const setSectionList = useAppStore((state) => state.setSectionsList);
@@ -35,10 +40,17 @@ const Table = () => {
   const setTable = useAppStore((state) => state.setTable);
   const addNewOrder = useAppStore((state) => state.addNewOrder);
   const queuedOrders = useAppStore((state) => state.orderList);
+  const waiterList = useAppStore((state) => state.waiters);
+  const selectedWaiter = useAppStore((state) => state.waiter);
+  const setWaiter = useAppStore((state) => state.setWaiter);
+  const dbData = useAppStore((state) => state.dbData);
+  const setDbData = useAppStore((state) => state.setDbData);
+  const clearOrders = useAppStore((state) => state.clearOrders);
 
   const navigation = useNavigation();
   const isLandscape = useOrientation();
   const { fetchData } = useFetchData();
+  const isLogoutConfirmOpen = useSharedValue(false);
 
   const getTableList = async (id) => {
     const respData = await fetchData(
@@ -168,9 +180,48 @@ const Table = () => {
     }
   };
 
+  const toggleSideMenu = () => {
+    showMenu(!isMenuShown);
+  };
+
+  const handleLogout = () => {
+    showMenu(false);
+    isLogoutConfirmOpen.value = true;
+  };
+
+  const handleConfirmLogout = () => {
+    isLogoutConfirmOpen.value = false;
+    setDbData(
+      dbData
+        ? {
+            ...dbData,
+            token: null,
+            adminname: null,
+            username: null,
+          }
+        : null,
+    );
+    setWaiter(null);
+    setTable(null);
+    clearOrders();
+    navigation.navigate("auth", { screen: "login" });
+  };
+
+  const toggleLogoutConfirm = () => {
+    isLogoutConfirmOpen.value = !isLogoutConfirmOpen.value;
+  };
+
   return (
-    <View style={styles.container}>
-      <AppBar />
+    <TouchableWithoutFeedback onPress={() => showMenu(false)}>
+      <View style={styles.container}>
+      <AppBar onToggleSideMenu={toggleSideMenu} />
+      <SideMenu
+        isVisible={isMenuShown}
+        onLogout={handleLogout}
+        waiterList={waiterList}
+        setWaiter={setWaiter}
+        selectedWaiter={selectedWaiter}
+      />
       <View style={styles.sectionView}>
         <Text style={styles.sectionHeader}>Tables</Text>
         {sectionList.length === 0 ? (
@@ -264,7 +315,13 @@ const Table = () => {
         data={orderList}
         handleCloseModal={handleCloseModal}
       />
-    </View>
+      <LogoutConfirm
+        isOpen={isLogoutConfirmOpen}
+        toggleSheet={toggleLogoutConfirm}
+        onConfirm={handleConfirmLogout}
+      />
+      </View>
+    </TouchableWithoutFeedback>
   );
 };
 
