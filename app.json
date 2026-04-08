@@ -3,7 +3,15 @@
     "name": "posapp",
     "slug": "datum-fin",
     "android": {
-      "package": "com.datumfin.posapp"
+      "package": "com.datumfin.posapp",
+      "usesCleartextTraffic": true
+    },
+    "ios": {
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
+      }
     },
     "version": "1.0.0",
     "plugins": [

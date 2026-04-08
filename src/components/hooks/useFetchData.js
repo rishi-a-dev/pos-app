@@ -17,6 +17,7 @@ export const useFetchData = () => {
     };
     const url = API_URL + apiname;
     const config = { headers, timeout: 20000 };
+
     try {
       const response = await (method === "get"
         ? axios.get(url, config)
@@ -39,19 +40,25 @@ export const useFetchData = () => {
     } catch (err) {
       const error = err && typeof err === "object" ? err : {};
       const status = error.response?.status;
-      const msg = error.message ?? "Network request failed";
+      const responseData = error.response?.data;
+      const serverMessage =
+        (typeof responseData === "string" && responseData) ||
+        responseData?.message ||
+        responseData?.error ||
+        responseData?.title ||
+        null;
+      const msg = serverMessage || error.message || "Network request failed";
       const code = error.code;
-
       if (status != null) {
         switch (status) {
           case 400:
-            showToast({ message: "Bad Request", type: "error" });
+            showToast({ message: msg, type: "error" });
             break;
           case 401:
-            showToast({ message: "Unauthorized", type: "error" });
+            showToast({ message: msg, type: "error" });
             break;
           default:
-            showToast({ message: "An error occurred", type: "error" });
+            showToast({ message: msg, type: "error" });
             break;
         }
       } else {
