@@ -61,36 +61,22 @@ const Login = () => {
   }, [dbData]);
 
   const fetchQRData = async (qrCodeValue) => {
-    try {
-      const respData = await fetchData(
-        `auth/Qreader?qrcode=${encodeURIComponent(qrCodeValue)}`,
-      );
-      if (respData) {
-        setDbData({
-          ...dbData,
-          skey: respData.sKey,
-        });
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        const data = await fetchData(
-          `auth/setcon?Id=${respData.companyData.id}`,
-        );
-        if (data) {
-          setDbData({
-            ...dbData,
-            skey: respData.sKey,
-            apilink: respData.apilink,
-            branchData: respData.branchData,
-            companyData: respData.companyData,
-          });
-          showToast({
-            type: "success",
-            message: "Connection successfull",
-            duration: 3000,
-          });
-        }
-      }
-    } catch (err) {
-      showToast({ message: "Error fetching QR data" });
+    const respData = await fetchData(
+      `auth/Qreader?qrcode=${encodeURIComponent(qrCodeValue)}`,
+    );
+    if (respData) {
+      setDbData({
+        ...dbData,
+        skey: respData.sKey,
+        apilink: respData.apilink,
+        branchData: respData.branchData,
+        companyData: respData.companyData,
+      });
+      showToast({
+        type: "success",
+        message: respData.message || "Connection successfull",
+        duration: 3000,
+      });
     }
   };
 
@@ -134,8 +120,6 @@ const Login = () => {
         setUsername("");
         setPassword("");
         navigation.navigate("drawer", { screen: "employeeselection" });
-      } else {
-        showToast({ message: "Please try again", type: "warn" });
       }
     } finally {
       setIsLoggingIn(false);

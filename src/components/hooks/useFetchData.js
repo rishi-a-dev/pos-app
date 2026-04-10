@@ -17,7 +17,6 @@ export const useFetchData = () => {
     };
     const url = API_URL + apiname;
     const config = { headers, timeout: 20000 };
-
     try {
       const response = await (method === "get"
         ? axios.get(url, config)
