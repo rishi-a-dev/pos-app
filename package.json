@@ -11,7 +11,8 @@
     "build:ios": "eas build --platform ios --profile preview",
     "build:preview": "eas build --profile preview",
     "submit:android": "eas submit --platform android --latest --profile production",
-    "submit:ios": "eas submit --platform ios --latest --profile production"
+    "submit:ios": "eas submit --platform ios --latest --profile production",
+    "manual-build:android": "cd android && ./gradlew assembleRelease"
   },
   "dependencies": {
     "@gorhom/portal": "^1.0.14",
