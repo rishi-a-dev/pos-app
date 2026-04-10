@@ -42,7 +42,7 @@ const Dashboard = () => {
   const [filteredFoodItems, setFilteredFoodItems] = useState([]);
   const [selectedItemForEdit, setSelectedItemForEdit] = useState(null);
   const [printerJobs, setPrinterJobs] = useState([]);
-  const [printerGroups, setPrinterGroups] = useState([]); // [{ printerName, items }]
+  const [printerGroups, setPrinterGroups] = useState([]); // [{ printerIp, items }]
   const [isPrinting, setIsPrinting] = useState(false);
   const hasFinalizedRef = React.useRef(false);
   const finalizeMetaRef = React.useRef({
@@ -108,7 +108,7 @@ const Dashboard = () => {
     (x?.itemID != null || x?.itemId != null);
 
   const normalizePrinterGroups = (apiResponse) => {
-    // DO NOT regroup by printerName because backend is already grouped by kitchen/printer.
+    // DO NOT regroup by printerIp because backend is already grouped by kitchen/printer.
     // We convert each already-grouped "kitchen items array" into a print job.
     const data = apiResponse?.data ?? apiResponse;
 
@@ -157,10 +157,10 @@ const Dashboard = () => {
           : [];
         if (filtered.length === 0) return null;
 
-        const printerName = filtered[0]?.printerName || DEFAULT_PRINTER_IP;
+        const printerIp = filtered[0]?.printerIp || DEFAULT_PRINTER_IP;
         return {
           groupId: String(idx),
-          printerName,
+          printerIp,
           items: filtered,
         };
       })
@@ -173,8 +173,8 @@ const Dashboard = () => {
     );
   };
 
-  const checkPrinterConnection = async (printerName) => {
-    const host = printerName || DEFAULT_PRINTER_IP;
+  const checkPrinterConnection = async (printerIp) => {
+    const host = printerIp || DEFAULT_PRINTER_IP;
 
     return await new Promise((resolve) => {
       let resolved = false;
@@ -250,7 +250,7 @@ const Dashboard = () => {
       error: "",
     });
 
-    const conn = await checkPrinterConnection(group.printerName);
+    const conn = await checkPrinterConnection(group.printerIp);
     if (!conn.ok) {
       updateJob(groupId, {
         status: "failed",
@@ -274,7 +274,7 @@ const Dashboard = () => {
 
     try {
       await printToPrinter({
-        printerName: group.printerName,
+        printerIp: group.printerIp,
         orderItems: group.items,
       });
 
@@ -330,7 +330,7 @@ const Dashboard = () => {
     setPrinterJobs(
       groups.map((g) => ({
         groupId: g.groupId,
-        printerName: g.printerName,
+        printerIp: g.printerIp,
         status: "pending",
         message: "Queued",
         error: "",
@@ -350,7 +350,7 @@ const Dashboard = () => {
         error: "",
       });
 
-      const conn = await checkPrinterConnection(group.printerName);
+      const conn = await checkPrinterConnection(group.printerIp);
       if (!conn.ok) {
         successMap.set(group.groupId, false);
         updateJob(group.groupId, {
@@ -375,7 +375,7 @@ const Dashboard = () => {
 
       try {
         await printToPrinter({
-          printerName: group.printerName,
+          printerIp: group.printerIp,
           orderItems: group.items,
         });
         successMap.set(group.groupId, true);
@@ -639,7 +639,7 @@ const Dashboard = () => {
                 {printerJobs.map((job) => (
                   <View key={job.groupId} style={styles.printerRow}>
                     <View style={styles.printerRowHeader}>
-                      <Text style={styles.printerName}>{job.printerName}</Text>
+                      <Text style={styles.printerIp}>{job.printerIp}</Text>
                       <Text style={styles.printerStatus}>{job.status}</Text>
                     </View>
 
@@ -740,7 +740,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  printerName: {
+  printerIp: {
     flex: 1,
     fontSize: Theme.typography.fontSize[10],
     fontFamily: "Montserrat-Medium",

@@ -11,14 +11,14 @@ const DEFAULT_PRINTER_IP = "192.168.1.126";
  * Dashboard is responsible for connection check + grouping + retries.
  */
 export const printToPrinter = ({
-  printerName,
+  printerIp,
   orderItems,
   printCallback,
   timeoutMs = 5000,
 }) => {
   const products = Array.isArray(orderItems) ? orderItems : [];
   const headerItem = products?.[0] ?? {};
-  const host = printerName || headerItem?.printerName || DEFAULT_PRINTER_IP;
+  const host = printerIp || headerItem?.printerIp || DEFAULT_PRINTER_IP;
 
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -47,7 +47,7 @@ export const printToPrinter = ({
     };
 
     if (!host) {
-      safeReject(new Error("Missing printerName/host"));
+      safeReject(new Error("Missing printerIp/host"));
       return;
     }
 
