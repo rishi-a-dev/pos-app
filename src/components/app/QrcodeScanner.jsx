@@ -11,6 +11,8 @@ import Theme from "../../theme/Theme";
 import { Close } from "../../assets/icons/Close";
 import { Path, Svg } from "react-native-svg";
 
+const APP_VERSION = require("../../../package.json").version;
+
 const QrcodeScanner = ({
   cameraVisible,
   setCameraVisible,
@@ -101,6 +103,12 @@ const QrcodeScanner = ({
         >
           <Close color="#FFF" />
         </TouchableOpacity>
+        <Text
+          style={[
+            styles.versionText,
+            { bottom: isLandscape ? "3%" : "10%" },
+          ]}
+        >{`Version ${APP_VERSION}`}</Text>
       </View>
     )
   );
@@ -146,4 +154,10 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   maskCenter: { flexDirection: "row" },
+  versionText: {
+    position: "absolute",
+    alignSelf: "center",
+    ...Theme.typography.H4,
+    color: Theme.colors.text.secondary.default,
+  },
 });

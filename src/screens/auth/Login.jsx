@@ -21,6 +21,8 @@ import { useAppStore } from "../../stores";
 import QrcodeScanner from "../../components/app/QrcodeScanner";
 import { ResetConfirm } from "../../components/app/ResetConfirm";
 
+const APP_VERSION = require("../../../package.json").version;
+
 const Login = () => {
   const [cameraVisible, setCameraVisible] = React.useState(false);
   const [username, setUsername] = React.useState("");
@@ -217,6 +219,7 @@ const Login = () => {
           toggleSheet={toggleSheet}
           onConfirm={onConfirm}
         />
+        <Text style={styles.versionText}>{`Version ${APP_VERSION}`}</Text>
       </View>
     </TouchableWithoutFeedback>
   );
@@ -293,5 +296,11 @@ const styles = StyleSheet.create({
   qrText: {
     ...Theme.typography.H3,
     color: Theme.colors.text.secondary.default,
+  },
+  versionText: {
+    alignSelf: "center",
+    marginBottom: "4%",
+    ...Theme.typography.H4,
+    color: Theme.colors.text.secondary.muted,
   },
 });
