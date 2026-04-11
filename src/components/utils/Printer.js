@@ -19,7 +19,6 @@ export const printToPrinter = ({
   const products = Array.isArray(orderItems) ? orderItems : [];
   const headerItem = products?.[0] ?? {};
   const host = printerIp || headerItem?.printerIp || DEFAULT_PRINTER_IP;
-
   return new Promise((resolve, reject) => {
     let settled = false;
     let printingFinishing = false;

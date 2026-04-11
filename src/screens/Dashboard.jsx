@@ -322,7 +322,6 @@ const Dashboard = () => {
       body,
     );
     if (!respData) return;
-
     const groups = normalizePrinterGroups(respData);
     if (groups.length === 0) return;
 

@@ -20,6 +20,11 @@ import { useFetchData } from "../../components/hooks/useFetchData";
 import { useAppStore } from "../../stores";
 import QrcodeScanner from "../../components/app/QrcodeScanner";
 import { ResetConfirm } from "../../components/app/ResetConfirm";
+import { Screen } from "../../components/layout/Screen";
+import {
+  normalizeConnectionResponse,
+  parseQrScannedForNormalization,
+} from "../../components/utils/qrPayload";
 
 const APP_VERSION = require("../../../package.json").version;
 
@@ -62,26 +67,6 @@ const Login = () => {
     }
   }, [dbData]);
 
-  const fetchQRData = async (qrCodeValue) => {
-    const respData = await fetchData(
-      `auth/Qreader?qrcode=${encodeURIComponent(qrCodeValue)}`,
-    );
-    if (respData) {
-      setDbData({
-        ...dbData,
-        skey: respData.sKey,
-        apilink: respData.apilink,
-        branchData: respData.branchData,
-        companyData: respData.companyData,
-      });
-      showToast({
-        type: "success",
-        message: respData.message || "Connection successfull",
-        duration: 3000,
-      });
-    }
-  };
-
   const handleQrButtonPress = () => {
     if (permission?.granted) {
       setCameraVisible(true);
@@ -95,13 +80,45 @@ const Login = () => {
     }
   };
 
-  const handleQrScanned = (data) => {
-    fetchQRData(data);
+  const handleQrScanned = async (data) => {
+    const parsed = parseQrScannedForNormalization(data);
+    const conn = normalizeConnectionResponse(parsed);
+    if (!conn) {
+      showToast({
+        type: "error",
+        message: "Invalid connection data from QR code",
+        duration: 4000,
+      });
+      setCameraVisible(false);
+      return;
+    }
+
+    const url = `${conn.apilink}auth/setrestcon?DatabaseName=${conn.companyData.value}&ServerName=${conn.serverName}`;
+    const headers = {
+      "Content-Type": "application/json",
+      ...(conn.sKey && { Skey: conn.sKey }),
+    };
+    const response = await fetch(url, { method: "GET", headers });
+    if (response.ok) {
+      setDbData({
+        ...dbData,
+        apilink: conn.apilink,
+        sKey: conn.sKey,
+        branchData: conn.branchData,
+        companyData: conn.companyData,
+      });
+      showToast({
+        type: "success",
+        message: conn.message,
+        duration: 3000,
+      });
+    }
     setCameraVisible(false);
   };
 
   const handleLogin = async () => {
     if (isLoggingIn) return; // prevent double-tap / repeated requests
+    if (!dbData?.sKey) return;
     setIsLoggingIn(true);
 
     const body = {
@@ -129,99 +146,101 @@ const Login = () => {
   };
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <View style={styles.background}>
-        {dbData && (
-          <TouchableOpacity
-            style={[
-              styles.qrButton,
-              {
-                alignSelf: "flex-end",
-                marginTop: 24,
-                marginRight: "3%",
-                paddingHorizontal: isLandscape ? "1%" : "2%",
-                paddingVertical: isLandscape ? "0.5%" : "1%",
-              },
-            ]}
-            onPress={toggleSheet}
-          >
-            <Text style={styles.qrText}>Reset App</Text>
-          </TouchableOpacity>
-        )}
-        <KeyboardAvoidingView style={styles.container} behavior="padding">
-          {dbData ? (
-            <View
+    <Screen>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={styles.background}>
+          {dbData?.sKey && (
+            <TouchableOpacity
               style={[
-                styles.innerContainer,
-                { width: isLandscape ? "50%" : "75%" },
+                styles.qrButton,
+                {
+                  alignSelf: "flex-end",
+                  marginTop: 24,
+                  marginRight: "3%",
+                  paddingHorizontal: isLandscape ? "1%" : "2%",
+                  paddingVertical: isLandscape ? "0.5%" : "1%",
+                },
               ]}
+              onPress={toggleSheet}
             >
-              <Text style={styles.header}>LOGIN</Text>
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Username</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder=""
-                  value={username}
-                  onChangeText={setUsername}
-                  autoCapitalize="none"
-                />
-              </View>
-              <View style={styles.inputContainer}>
-                <Text style={styles.inputLabel}>Password</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder=""
-                  secureTextEntry
-                  value={password}
-                  onChangeText={setPassword}
-                  autoCapitalize="none"
-                />
-              </View>
-              <TouchableOpacity
-                style={[styles.button, isLoggingIn && { opacity: 0.6 }]}
-                onPress={handleLogin}
-                disabled={isLoggingIn}
-              >
-                <Text style={styles.buttonText}>
-                  {isLoggingIn ? "Logging in..." : "Login"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View>
-              <Text style={styles.buttonText}>Scan QR Code to continue</Text>
-              <TouchableOpacity
-                style={[
-                  styles.qrButton,
-                  {
-                    alignSelf: "center",
-                    marginTop: isLandscape ? "8%" : "12%",
-                    paddingHorizontal: isLandscape ? "1%" : "2%",
-                    paddingVertical: isLandscape ? "0.5%" : "1%",
-                  },
-                ]}
-                onPress={handleQrButtonPress}
-              >
-                <Text style={styles.qrText}>Scan QR code</Text>
-              </TouchableOpacity>
-            </View>
+              <Text style={styles.qrText}>Reset App</Text>
+            </TouchableOpacity>
           )}
-        </KeyboardAvoidingView>
-        <QrcodeScanner
-          isLandscape={isLandscape}
-          cameraVisible={cameraVisible}
-          onScan={handleQrScanned}
-          setCameraVisible={setCameraVisible}
-        />
-        <ResetConfirm
-          isOpen={isOpen}
-          toggleSheet={toggleSheet}
-          onConfirm={onConfirm}
-        />
-        <Text style={styles.versionText}>{`Version ${APP_VERSION}`}</Text>
-      </View>
-    </TouchableWithoutFeedback>
+          <KeyboardAvoidingView style={styles.container} behavior="padding">
+            {dbData?.sKey ? (
+              <View
+                style={[
+                  styles.innerContainer,
+                  { width: isLandscape ? "50%" : "75%" },
+                ]}
+              >
+                <Text style={styles.header}>LOGIN</Text>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Username</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder=""
+                    value={username}
+                    onChangeText={setUsername}
+                    autoCapitalize="none"
+                  />
+                </View>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Password</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder=""
+                    secureTextEntry
+                    value={password}
+                    onChangeText={setPassword}
+                    autoCapitalize="none"
+                  />
+                </View>
+                <TouchableOpacity
+                  style={[styles.button, isLoggingIn && { opacity: 0.6 }]}
+                  onPress={handleLogin}
+                  disabled={isLoggingIn}
+                >
+                  <Text style={styles.buttonText}>
+                    {isLoggingIn ? "Logging in..." : "Login"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View>
+                <Text style={styles.buttonText}>Scan QR Code to continue</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.qrButton,
+                    {
+                      alignSelf: "center",
+                      marginTop: isLandscape ? "8%" : "12%",
+                      paddingHorizontal: isLandscape ? "1%" : "2%",
+                      paddingVertical: isLandscape ? "0.5%" : "1%",
+                    },
+                  ]}
+                  onPress={handleQrButtonPress}
+                >
+                  <Text style={styles.qrText}>Scan QR code</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </KeyboardAvoidingView>
+          <QrcodeScanner
+            isLandscape={isLandscape}
+            cameraVisible={cameraVisible}
+            onScan={handleQrScanned}
+            setCameraVisible={setCameraVisible}
+          />
+          <ResetConfirm
+            isOpen={isOpen}
+            toggleSheet={toggleSheet}
+            onConfirm={onConfirm}
+          />
+          <Text style={styles.versionText}>{`Version ${APP_VERSION}`}</Text>
+        </View>
+      </TouchableWithoutFeedback>
+    </Screen>
   );
 };
 

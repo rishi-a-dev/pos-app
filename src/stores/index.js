@@ -32,6 +32,6 @@ export const useAppStore = create()(
       partialize: (state) => ({
         dbData: state.dbData,
       }),
-    }
-  )
+    },
+  ),
 );

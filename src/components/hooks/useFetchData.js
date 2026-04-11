@@ -12,7 +12,7 @@ export const useFetchData = () => {
     const headers = {
       Accept: "application/json",
       "Content-Type": "application/json",
-      ...(dbData?.skey && { Skey: dbData.skey }),
+      ...(dbData?.sKey && { Skey: dbData.sKey }),
       ...(dbData?.token && { Authorization: "bearer " + dbData.token }),
     };
     const url = API_URL + apiname;
