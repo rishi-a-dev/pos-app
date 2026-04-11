@@ -91,6 +91,17 @@ const Table = () => {
     }, [selectedSection?.id]),
   );
 
+  /** Single-chair table rows often omit chairName; treat as chair 1 for orders. */
+  const withChairNameForSingleTable = (chair, isSingleChairTable) => {
+    if (!isSingleChairTable || !chair) return chair;
+    const name = chair.chairName;
+    const isEmpty =
+      name == null ||
+      name === "" ||
+      (typeof name === "string" && name.trim() === "");
+    return isEmpty ? { ...chair, chairName: "1" } : chair;
+  };
+
   const handleSection = (section) => {
     setSection(section);
     setSelectedTableGroupKey(null);
@@ -432,7 +443,12 @@ const Table = () => {
                       return;
                     }
                     setSelectedTableGroupKey(tableGroup.key);
-                    handleTable(primaryChair);
+                    handleTable(
+                      withChairNameForSingleTable(
+                        primaryChair,
+                        !hasMultipleChairs,
+                      ),
+                    );
                   }}
                 />
               );
