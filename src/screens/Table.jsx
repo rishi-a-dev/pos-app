@@ -26,6 +26,48 @@ import LogoutConfirm from "../components/app/LogoutConfirm";
 import { BottomSheet } from "../components/core/BottomSheet";
 import { Close } from "../assets/icons/Close";
 
+function isBlankChairName(name) {
+  return (
+    name == null ||
+    name === "" ||
+    (typeof name === "string" && name.trim() === "")
+  );
+}
+
+/** Blank, "1", "01" are the same seat; non-numeric names stay distinct. */
+function normalizedChairSlot(name) {
+  if (isBlankChairName(name)) return "1";
+  const trimmed = String(name).trim();
+  const n = Number(trimmed);
+  if (Number.isFinite(n) && n > 0) return String(n);
+  return trimmed;
+}
+
+function chairSlotMergeKey(table) {
+  if (!table) return "||";
+  const tableName = String(table.tableName ?? "");
+  const id = String(table.id ?? "");
+  return `${tableName}|${id}|${normalizedChairSlot(table.chairName)}`;
+}
+
+function mergeChairRowsFromQueue(existing, queuedRow) {
+  const chairName = !isBlankChairName(queuedRow.chairName)
+    ? queuedRow.chairName
+    : !isBlankChairName(existing.chairName)
+      ? existing.chairName
+      : "1";
+  return { ...existing, ...queuedRow, chairName };
+}
+
+function orderTableMatchesChair(orderTable, chair) {
+  if (!orderTable || !chair) return false;
+  if (orderTable.id !== chair.id) return false;
+  return (
+    normalizedChairSlot(orderTable.chairName) ===
+    normalizedChairSlot(chair.chairName)
+  );
+}
+
 const Table = () => {
   const [orderList, setOrderList] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
@@ -33,7 +75,6 @@ const Table = () => {
   const [popupContext, setPopupContext] = useState("table");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isMenuShown, showMenu] = useState(false);
-  const [selectedTableGroupKey, setSelectedTableGroupKey] = useState(null);
 
   const sectionList = useAppStore((state) => state.sections);
   const setSectionList = useAppStore((state) => state.setSectionsList);
@@ -43,6 +84,12 @@ const Table = () => {
   const selectedTable = useAppStore((state) => state.table);
   const setSection = useAppStore((state) => state.setSection);
   const setTable = useAppStore((state) => state.setTable);
+  const selectedTableGroupKey = useAppStore(
+    (state) => state.selectedTableGroupKey,
+  );
+  const setSelectedTableGroupKey = useAppStore(
+    (state) => state.setSelectedTableGroupKey,
+  );
   const addNewOrder = useAppStore((state) => state.addNewOrder);
   const queuedOrders = useAppStore((state) => state.orderList);
   const waiterList = useAppStore((state) => state.waiters);
@@ -118,7 +165,7 @@ const Table = () => {
       (t) => t?.chairName === null || t?.chairName === undefined || t?.chairName === "",
     );
     const existingChairs = matchingTables
-      .map((t) => Number(t?.chairName))
+      .map((t) => Number(normalizedChairSlot(t?.chairName)))
       .filter((chairNo) => Number.isFinite(chairNo) && chairNo > 0);
     // A base single-chair row often has empty chairName; treat it as chair 1.
     if (hasUnnamedChair && !existingChairs.includes(1)) {
@@ -142,10 +189,8 @@ const Table = () => {
   };
 
   const handleTable = (table) => {
-    const isQueued = queuedOrders.some(
-      (order) =>
-        order?.table?.id === table?.id &&
-        (order?.table?.chairName ?? "") === (table?.chairName ?? ""),
+    const isQueued = queuedOrders.some((order) =>
+      orderTableMatchesChair(order?.table, table),
     );
     const isKotTable =
       table?.transactionID !== null && table?.transactionID !== undefined;
@@ -160,10 +205,8 @@ const Table = () => {
   };
 
   const handleOrders = (table) => {
-    const existingOrder = queuedOrders.find(
-      (order) =>
-        order?.table?.id === table?.id &&
-        (order?.table?.chairName ?? "") === (table?.chairName ?? ""),
+    const existingOrder = queuedOrders.find((order) =>
+      orderTableMatchesChair(order?.table, table),
     );
 
     setTable(table);
@@ -265,6 +308,11 @@ const Table = () => {
     handleOrders(selectedTable);
   };
 
+  const handleTableListItems = () => {
+    setTableAdditionalPopup(false);
+    handleLongPress(selectedTable);
+  };
+
   const mergedTableList = useMemo(() => {
     const safeTableList = Array.isArray(tableList) ? tableList : [];
     const selectedSectionId = selectedSection?.id;
@@ -276,26 +324,32 @@ const Table = () => {
       .map((order) => order?.table)
       .filter(Boolean);
 
-    if (!queuedTablesForSection.length) {
-      return safeTableList;
+    const byKey = new Map();
+
+    const preferApiDuplicate = (a, b) => {
+      const rank = (r) =>
+        (r?.transactionID != null && r?.transactionID !== undefined ? 2 : 0) +
+        (!isBlankChairName(r?.chairName) ? 1 : 0);
+      return rank(b) > rank(a) ? b : a;
+    };
+
+    for (const row of safeTableList) {
+      const k = chairSlotMergeKey(row);
+      const prev = byKey.get(k);
+      byKey.set(k, prev ? preferApiDuplicate(prev, row) : row);
     }
 
-    const seen = new Set(
-      safeTableList.map(
-        (table) =>
-          `${table?.tableName || ""}|${table?.id || ""}|${table?.chairName ?? ""}`,
-      ),
-    );
-    const queuedTableEntries = queuedTablesForSection.filter((table) => {
-      const key = `${table?.tableName || ""}|${table?.id || ""}|${table?.chairName ?? ""}`;
-      if (seen.has(key)) {
-        return false;
+    for (const row of queuedTablesForSection) {
+      const k = chairSlotMergeKey(row);
+      const existing = byKey.get(k);
+      if (existing) {
+        byKey.set(k, mergeChairRowsFromQueue(existing, row));
+      } else {
+        byKey.set(k, row);
       }
-      seen.add(key);
-      return true;
-    });
+    }
 
-    return [...safeTableList, ...queuedTableEntries];
+    return [...byKey.values()];
   }, [queuedOrders, selectedSection?.id, tableList]);
 
   const tableGroups = useMemo(() => {
@@ -333,10 +387,10 @@ const Table = () => {
     }
 
     if (
-      !selectedTableGroupKey ||
+      selectedTableGroupKey &&
       !tableGroups.some((g) => g.key === selectedTableGroupKey)
     ) {
-      setSelectedTableGroupKey(tableGroups[0].key);
+      setSelectedTableGroupKey(null);
     }
   }, [tableGroups, selectedTableGroupKey]);
 
@@ -407,11 +461,8 @@ const Table = () => {
           >
             {tableGroups?.map((tableGroup, index) => {
               const isQueued = tableGroup.chairs.some((chair) =>
-                queuedOrders.some(
-                  (order) =>
-                    order?.table?.id === chair?.id &&
-                    (order?.table?.chairName ?? "") ===
-                      (chair?.chairName ?? ""),
+                queuedOrders.some((order) =>
+                  orderTableMatchesChair(order?.table, chair),
                 ),
               );
               const isKotTable = tableGroup.chairs.some(
@@ -433,8 +484,10 @@ const Table = () => {
                   title={`Table ${tableGroup.tableName}`}
                   subtitle={
                     hasMultipleChairs
-                      ? `${chairCount} chairs • View Chairs`
-                      : "Single chair table"
+                      ? `${chairCount} orders • View Orders`
+                      : isQueued || isKotTable
+                        ? "Single order table"
+                        : undefined
                   }
                   onPress={() => {
                     if (hasMultipleChairs) {
@@ -463,25 +516,24 @@ const Table = () => {
           <View style={styles.chairSheetHeader}>
             <View>
               <Text style={styles.chairListTitle}>
-                Table {selectedTableGroup?.tableName || ""} - Chairs
+                Table {selectedTableGroup?.tableName || ""} - Orders
               </Text>
               <Text style={styles.chairListHint}>
-                Tap a chair to view getItems
+                Tap an order to view getItems
               </Text>
             </View>
             <View style={styles.chairSheetHeaderActions}>
               <TouchableOpacity
                 style={styles.addChairButton}
                 onPress={() => {
-                  const tableForChair =
-                    selectedTableGroup?.chairs?.[0] || selectedTable;
+                  const tableForChair = selectedTableGroup?.chairs?.[0];
                   if (tableForChair) {
                     isChairSheetOpen.value = false;
                     handleNewKOT(tableForChair);
                   }
                 }}
               >
-                <Text style={styles.addChairButtonText}>+ Add Chair</Text>
+                <Text style={styles.addChairButtonText}>+ Add Order</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={toggleChairSheet}>
                 <Close />
@@ -504,11 +556,8 @@ const Table = () => {
                 const isKotChair =
                   chair?.transactionID !== null &&
                   chair?.transactionID !== undefined;
-                const normalizedChairName = chair?.chairName ?? "";
-                const isQueued = queuedOrders.some(
-                  (order) =>
-                    order?.table?.id === chair?.id &&
-                    (order?.table?.chairName ?? "") === normalizedChairName,
+                const isQueued = queuedOrders.some((order) =>
+                  orderTableMatchesChair(order?.table, chair),
                 );
 
                 return (
@@ -532,7 +581,10 @@ const Table = () => {
                             styles.chairChipTextActive,
                         ]}
                       >
-                        Chair {chair?.chairName || index + 1}
+                        Order{" "}
+                        {isBlankChairName(chair?.chairName)
+                          ? index + 1
+                          : chair.chairName}
                       </Text>
                       <View
                         style={[
@@ -574,10 +626,14 @@ const Table = () => {
         <TableAdditionalPopup
           show={tableAdditionalPopup}
           tooglePopup={() => setTableAdditionalPopup(!tableAdditionalPopup)}
-          title={popupContext === "chair" ? "Chair Options" : "Options"}
+          title={popupContext === "chair" ? "Order Options" : "Options"}
           addItemText="Add Item"
+          listItemText="List Items"
           secondaryActionText={
             popupContext === "chair" ? "List Items" : "New KOT"
+          }
+          handleListItems={
+            popupContext === "chair" ? undefined : () => handleTableListItems()
           }
           handleNewKOT={() =>
             popupContext === "chair"

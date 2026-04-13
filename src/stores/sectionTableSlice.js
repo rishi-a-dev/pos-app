@@ -7,6 +7,15 @@ export const sectionTableSlice = (set) => ({
   setSection: (section) => set({ section }),
   table: null,
   setTable: (table) => set({ table }),
+  /** Matches Table screen grouping: tableName or `table-${id}` */
+  selectedTableGroupKey: null,
+  setSelectedTableGroupKey: (key) => set({ selectedTableGroupKey: key }),
   resetSectionTable: () =>
-    set({ sections: [], tables: [], section: null, table: null }),
+    set({
+      sections: [],
+      tables: [],
+      section: null,
+      table: null,
+      selectedTableGroupKey: null,
+    }),
 });

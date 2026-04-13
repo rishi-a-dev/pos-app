@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
 import { GestureDetector, Gesture } from "react-native-gesture-handler";
 import Animated, {
   useSharedValue,
@@ -18,6 +18,7 @@ const Slider = ({
   sliderTrackStyle,
   sliderTextStyle,
   onSuccess,
+  disabled = false,
 }) => {
   const [sliderWidth, setSliderWidth] = useState(0);
   const MAX_VALUE = sliderWidth - (INITIAL_BOX_SIZE + 20);
@@ -30,7 +31,14 @@ const Slider = ({
     }, 5000);
   }, [onSuccess]);
 
+  React.useEffect(() => {
+    if (disabled) {
+      offset.value = withTiming(0);
+    }
+  }, [disabled, offset]);
+
   const pan = Gesture.Pan()
+    .enabled(!disabled)
     .onChange((event) => {
       const newOffset = offset.value + event.changeX;
       if (newOffset <= 0) {
@@ -79,6 +87,11 @@ const Slider = ({
           <Right color={"#000"} stroke={4} />
         </Animated.View>
       </GestureDetector>
+      {disabled && (
+        <View style={styles.loadingOverlay} pointerEvents="box-none">
+          <ActivityIndicator color="#f8f9ff" size="small" />
+        </View>
+      )}
     </View>
   );
 };
@@ -89,6 +102,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 10,
     position: "relative",
+    overflow: "hidden",
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.2)",
   },
   sliderText: {
     position: "absolute",

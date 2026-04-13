@@ -26,6 +26,8 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 export const OrderList = ({
   isLandscape,
   showRightDrawer,
+  kotFetching = false,
+  isPrinting = false,
   handlePrintButtonPress,
   orderedItems,
   setSelectedItemForEdit,
@@ -241,7 +243,14 @@ export const OrderList = ({
       <View style={styles.printButtonView}>
         <Slider
           onSuccess={handlePrintButtonPress}
-          sliderText="Swipe to print KOT"
+          disabled={kotFetching || isPrinting}
+          sliderText={
+            kotFetching
+              ? "Loading kitchen print data…"
+              : isPrinting
+                ? "Printing to kitchen…"
+                : "Swipe to print KOT"
+          }
           trackColor={Theme.colors.background.accents.dark}
           sliderTextStyle={{ ...Theme.typography.H4 }}
         />

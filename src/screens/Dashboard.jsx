@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Modal,
   ScrollView,
@@ -13,12 +13,13 @@ import {
 import { useSharedValue } from "react-native-reanimated";
 import TcpSocket from "react-native-tcp-socket";
 import { useNavigation } from "@react-navigation/native";
+import LottieView from "lottie-react-native";
 
 import Theme from "../theme/Theme";
 import { useAppStore } from "../stores";
 import { AppBar } from "../components/app/AppBar";
 import { printToPrinter } from "../components/utils/Printer";
-import { MenuList } from "../components/app/MenuList";
+import { MenuList, MENU_SCROLL_BOTTOM_INSET } from "../components/app/MenuList";
 import { OrderList } from "../components/app/OrderList";
 import { CurrentOrderItem } from "../components/app/CurrentOrderItem";
 import { SideMenu } from "../components/app/SideMenu";
@@ -29,21 +30,24 @@ import { useFetchData } from "../components/hooks/useFetchData";
 import { OrderTableList } from "../components/app/OrderTableList";
 import { createPostOrderItem } from "../components/utils/PostOrderItemStructure";
 import LogoutConfirm from "../components/app/LogoutConfirm";
+import { useToast } from "../components/context/ToastContext";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const Dashboard = () => {
   const navigation = useNavigation();
   const isLandscape = useOrientation();
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isModalVisible, setModalVisible] = useState(false);
   const [isMenuShown, showMenu] = useState(false);
   const [foodItems, setFoodItems] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(1);
-  const [filteredFoodItems, setFilteredFoodItems] = useState([]);
   const [selectedItemForEdit, setSelectedItemForEdit] = useState(null);
   const [printerJobs, setPrinterJobs] = useState([]);
   const [printerGroups, setPrinterGroups] = useState([]); // [{ printerIp, items }]
   const [isPrinting, setIsPrinting] = useState(false);
+  const [isKotFetching, setIsKotFetching] = useState(false);
   const hasFinalizedRef = React.useRef(false);
   const finalizeMetaRef = React.useRef({
     initialOrderListLength: 0,
@@ -57,6 +61,8 @@ const Dashboard = () => {
   const isOpen = useSharedValue(false);
   const isLogoutConfirmOpen = useSharedValue(false);
   const { fetchData } = useFetchData();
+  const { showToast } = useToast();
+  const safeInsets = useSafeAreaInsets();
   const orderList = useAppStore((state) => state.orderList);
   const addItem = useAppStore((state) => state.addItem);
   const increaseQuantity = useAppStore((state) => state.increaseItemQuantity);
@@ -73,6 +79,49 @@ const Dashboard = () => {
   const selectedTable = useAppStore((state) => state.table);
 
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const isMountedRef = React.useRef(true);
+  const isKotPrintLoading = isKotFetching || isPrinting;
+
+  const loadMenuData = async ({ showLoader = false } = {}) => {
+    if (showLoader) {
+      setIsLoading(true);
+    }
+    try {
+      const [catRes, itemsRes] = await Promise.all([
+        fetchData("api/v1/restaurent/getCat"),
+        fetchData("api/v1/restaurent/fillitems"),
+      ]);
+      if (!isMountedRef.current) return;
+      if (catRes?.data) {
+        setCategories([{ id: 1, code: 1, description: "All" }, ...catRes.data]);
+      }
+      if (itemsRes?.data?.product) {
+        setFoodItems(itemsRes.data.product);
+      }
+    } finally {
+      if (!isMountedRef.current) return;
+      if (showLoader) {
+        setIsLoading(false);
+      }
+      setIsRefreshing(false);
+    }
+  };
+
+  const filteredFoodItems = useMemo(() => {
+    let list = foodItems;
+    if (selectedCategory !== 1) {
+      list = list?.filter(
+        (item) => item.items.commodityID === selectedCategory,
+      );
+    }
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      list = list?.filter((item) =>
+        item?.items?.itemName?.toLowerCase().includes(q),
+      );
+    }
+    return list ?? [];
+  }, [foodItems, selectedCategory, searchQuery]);
 
   React.useEffect(() => {
     const backAction = () => {
@@ -300,10 +349,18 @@ const Dashboard = () => {
   };
 
   const handlePrintButtonPress = async () => {
-    if (isPrinting) return;
+    if (isPrinting || isKotFetching) return;
 
     const currentOrder = orderList[selectedIndex];
     if (!currentOrder) return;
+
+    if (!currentOrder.items?.length) {
+      showToast({
+        message: "Add items to the order before printing.",
+        type: "info",
+      });
+      return;
+    }
 
     const initialOrderListLength = orderList.length;
     finalizeMetaRef.current = { initialOrderListLength, selectedIndex };
@@ -316,14 +373,28 @@ const Dashboard = () => {
 
     const chairName = currentOrder.table.chairName ?? "0";
 
-    const respData = await fetchData(
-      `api/v1/restaurent/svprintKot?sectionId=${currentOrder.section.id}&tableId=${currentOrder.table.id}&tableName=${currentOrder.table.tableName}&salesManId=${selectedWaiter.id}&chairName=${chairName}`,
-      "post",
-      body,
-    );
+    let respData;
+    setIsKotFetching(true);
+    try {
+      respData = await fetchData(
+        `api/v1/restaurent/svprintKot?sectionId=${currentOrder.section.id}&tableId=${currentOrder.table.id}&tableName=${currentOrder.table.tableName}&salesManId=${selectedWaiter.id}&chairName=${chairName}`,
+        "post",
+        body,
+      );
+    } finally {
+      setIsKotFetching(false);
+    }
+    console.log("body", JSON.stringify(body));
+    console.log("respData", respData);
     if (!respData) return;
     const groups = normalizePrinterGroups(respData);
-    if (groups.length === 0) return;
+    if (groups.length === 0) {
+      showToast({
+        message: "Nothing to print — no items returned for the kitchen.",
+        type: "info",
+      });
+      return;
+    }
 
     setPrinterGroups(groups);
     setPrinterJobs(
@@ -414,69 +485,16 @@ const Dashboard = () => {
   };
 
   useEffect(() => {
-    setIsLoading(true);
-
-    let filteredItems = foodItems;
-
-    if (selectedCategory !== 1) {
-      filteredItems = filteredItems?.filter(
-        (item) => item.items.commodityID === selectedCategory,
-      );
-    }
-
-    if (searchQuery) {
-      filteredItems = filteredItems?.filter((item) =>
-        item?.items?.itemName
-          ?.toLowerCase()
-          .includes(searchQuery.toLowerCase()),
-      );
-    }
-
-    setFilteredFoodItems(filteredItems);
-
-    setTimeout(() => {
-      setIsLoading(false);
-    }, 30);
-  }, [selectedCategory, foodItems, searchQuery]);
-
-  useEffect(() => {
-    const getCategoryList = async () => {
-      const respData = await fetchData("api/v1/restaurent/getCat");
-      if (respData) {
-        setCategories([
-          { id: 1, code: 1, description: "All" },
-          ...respData.data,
-        ]);
-      }
+    loadMenuData({ showLoader: true });
+    return () => {
+      isMountedRef.current = false;
     };
-    const getItemsList = async () => {
-      const respData = await fetchData("api/v1/restaurent/fillitems");
-      if (respData?.data?.product) {
-        setFoodItems(respData.data.product);
-      }
-    };
-
-    getCategoryList();
-    getItemsList();
   }, []);
 
-  useEffect(() => {
-    setIsLoading(true);
-    if (selectedCategory === 1) {
-      setFilteredFoodItems(foodItems);
-      setTimeout(() => {
-        setIsLoading(false);
-      }, 500);
-    } else {
-      const filteredItems = foodItems?.filter(
-        (item) => item.items.commodityID === selectedCategory,
-      );
-      setFilteredFoodItems(filteredItems);
-      setTimeout(() => {
-        setIsLoading(false);
-      }, 500);
-    }
-  }, []);
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await loadMenuData();
+  };
 
   useEffect(() => {
     if (!selectedTable || orderList.length === 0) return;
@@ -561,6 +579,14 @@ const Dashboard = () => {
     isLogoutConfirmOpen.value = !isLogoutConfirmOpen.value;
   };
 
+  const showFloatingCurrentOrderBar =
+    !isLandscape &&
+    !showRightDrawer &&
+    (orderList[selectedIndex]?.items?.length ?? 0) > 0;
+  const menuScrollBottomInset = showFloatingCurrentOrderBar
+    ? MENU_SCROLL_BOTTOM_INSET + safeInsets.bottom
+    : 0;
+
   return (
     <TouchableWithoutFeedback onPress={() => showMenu(false)}>
       <View style={styles.container}>
@@ -585,6 +611,9 @@ const Dashboard = () => {
             selectedCategory={selectedCategory}
             handleCategoryFilter={handleCategoryFilter}
             addToCart={addToCart}
+            isRefreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            contentBottomInset={menuScrollBottomInset}
             onOverlayPress={() => {
               if (showRightDrawer) {
                 setShowRightDrawer(false);
@@ -608,6 +637,8 @@ const Dashboard = () => {
             isLandscape={isLandscape}
             selectedIndex={selectedIndex}
             showRightDrawer={showRightDrawer}
+            kotFetching={isKotFetching}
+            isPrinting={isPrinting}
             handlePrintButtonPress={handlePrintButtonPress}
             orderedItems={orderList[selectedIndex]}
             setSelectedItemForEdit={setSelectedItemForEdit}
@@ -669,6 +700,30 @@ const Dashboard = () => {
               >
                 <Text style={styles.closeButtonText}>Close</Text>
               </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+        <Modal
+          animationType="fade"
+          transparent={true}
+          statusBarTranslucent
+          visible={isKotPrintLoading}
+          onRequestClose={() => {}}
+        >
+          <View style={styles.loadingModalContainer}>
+            <View style={styles.loadingModalContent}>
+              <LottieView
+                autoPlay
+                loop
+                style={styles.loadingAnimation}
+                source={require("../assets/lottie/loader.json")}
+              />
+              <Text style={styles.loadingTitle}>Printing KOT</Text>
+              <Text style={styles.loadingSubtitle}>
+                {isKotFetching
+                  ? "Preparing kitchen print data..."
+                  : "Sending KOT to printer..."}
+              </Text>
             </View>
           </View>
         </Modal>
@@ -786,5 +841,38 @@ const styles = StyleSheet.create({
     fontSize: Theme.typography.fontSize[12],
     fontFamily: "Montserrat-SemiBold",
     color: Theme.colors.text.primary.default,
+  },
+  loadingModalContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+  },
+  loadingModalContent: {
+    width: "78%",
+    maxWidth: 340,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Theme.colors.background.accents.white,
+    borderRadius: 14,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+  },
+  loadingAnimation: {
+    width: 110,
+    height: 110,
+  },
+  loadingTitle: {
+    marginTop: 4,
+    fontSize: Theme.typography.fontSize[16],
+    fontFamily: "Montserrat-SemiBold",
+    color: Theme.colors.text.primary.default,
+  },
+  loadingSubtitle: {
+    marginTop: 6,
+    textAlign: "center",
+    fontSize: Theme.typography.fontSize[12],
+    fontFamily: "Montserrat-Medium",
+    color: Theme.colors.text.secondary.default,
   },
 });

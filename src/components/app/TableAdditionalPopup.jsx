@@ -19,7 +19,9 @@ const TableAdditionalPopup = ({
   showAddItemBtn = true,
   handleNewKOT,
   handleAddItems,
+  handleListItems,
   addItemText = "Add Item",
+  listItemText = "List Items",
   secondaryActionText = "New KOT",
   title = "Options",
 }) => {
@@ -45,17 +47,36 @@ const TableAdditionalPopup = ({
                   <TouchableOpacity
                     style={[
                       styles.button,
-                      { backgroundColor: Theme.colors.background.accents.green },
+                      {
+                        backgroundColor: Theme.colors.background.accents.green,
+                      },
                     ]}
                     onPress={handleAddItems}
                   >
                     <Text style={styles.buttonText}>{addItemText}</Text>
                   </TouchableOpacity>
                 )}
+                {handleListItems && (
+                  <TouchableOpacity
+                    style={[
+                      styles.button,
+                      {
+                        backgroundColor: Theme.colors.background.accents.brown,
+                      },
+                    ]}
+                    onPress={handleListItems}
+                  >
+                    <Text style={[styles.buttonText, styles.listButtonText]}>
+                      {listItemText}
+                    </Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
                   style={[
                     styles.button,
-                    { backgroundColor: Theme.colors.background.primary.default },
+                    {
+                      backgroundColor: Theme.colors.background.primary.default,
+                    },
                   ]}
                   onPress={handleNewKOT}
                 >
@@ -111,5 +132,8 @@ const styles = StyleSheet.create({
   buttonText: {
     ...Theme.typography.H2,
     color: Theme.colors.text.secondary.default,
+  },
+  listButtonText: {
+    color: Theme.colors.text.primary.default,
   },
 });

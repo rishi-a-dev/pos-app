@@ -23,6 +23,7 @@ export const useAppStore = create()(
           tables: [],
           section: null,
           table: null,
+          selectedTableGroupKey: null,
         });
       },
     }),

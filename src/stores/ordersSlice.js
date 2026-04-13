@@ -23,9 +23,17 @@ export const ordersSlice = (set) => ({
 
   // Remove an order based on orderIndex
   removeOrder: (orderIndex) =>
-    set((state) => ({
-      orderList: state.orderList.filter((_, idx) => idx !== orderIndex),
-    })),
+    set((state) => {
+      const removed = state.orderList[orderIndex];
+      const t = removed?.table;
+      const groupKey = t?.tableName || `table-${t?.id}`;
+      const clearTableGroupSelection =
+        Boolean(groupKey) && state.selectedTableGroupKey === groupKey;
+      return {
+        orderList: state.orderList.filter((_, idx) => idx !== orderIndex),
+        ...(clearTableGroupSelection ? { selectedTableGroupKey: null } : {}),
+      };
+    }),
 
   // Add an item to an order based on order index
   addItem: (orderIndex, newItem) =>
