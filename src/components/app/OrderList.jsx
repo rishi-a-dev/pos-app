@@ -67,7 +67,8 @@ export const OrderList = ({
     orderedItems?.items?.reduce((total, item) => total + item?.qty, 0);
   const calculateTotalPrice = () =>
     orderedItems?.items?.reduce(
-      (total, item) => total + item?.rate * item?.qty,
+      (total, item) =>
+        total + (item?.unit?.sellingPrice || item?.rate) * item?.qty,
       0,
     );
 
@@ -234,7 +235,9 @@ export const OrderList = ({
                   )}
                 </View>
                 <Text style={styles.listRowsNo}>{item.qty}</Text>
-                <Text style={styles.listRowsPrice}>₹{item.rate}</Text>
+                <Text style={styles.listRowsPrice}>
+                  {item.unit.sellingPrice || item.rate}
+                </Text>
               </TouchableOpacity>
             ))}
           </ScrollView>

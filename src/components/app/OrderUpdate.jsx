@@ -55,7 +55,7 @@ const OrderUpdate = ({
       const uniqueId =
         item?.id + updateSelectedItem.unit.unit + updateSelectedItem.rate;
       const existingItem = orderList[selectedIndex].items?.find(
-        (exItem) => exItem.uuid === uniqueId
+        (exItem) => exItem.uuid === uniqueId,
       );
       const updateItemData = {
         rate: parseFloat(updateSelectedItem.rate) || 0,

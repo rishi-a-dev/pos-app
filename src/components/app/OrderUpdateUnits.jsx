@@ -34,6 +34,7 @@ export const OrderUpdateUnits = ({
                         unit: itemUnit?.unit,
                         basicUnit: itemUnit?.basicUnit,
                         factor: itemUnit?.factor,
+                        sellingPrice: itemUnit?.sellingPrice,
                       },
                     }))
                   }
@@ -71,7 +72,7 @@ export const OrderUpdateUnits = ({
                       },
                     ]}
                   >
-                    ₹
+                    {itemUnit.sellingPrice}
                   </Text>
                 </TouchableOpacity>
               )}
