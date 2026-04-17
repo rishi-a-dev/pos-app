@@ -27,7 +27,7 @@ export const CurrentOrderItem = ({
     (state) => ({
       increaseItemQuantity: state.increaseItemQuantity,
       decreaseItemQuantity: state.decreaseItemQuantity,
-    })
+    }),
   );
 
   const translateX = useRef(new Animated.Value(0)).current;
@@ -115,12 +115,13 @@ const styles = StyleSheet.create({
     bottom: "8%",
     right: 0,
     backgroundColor: Theme.colors.background.accents.blue,
+    height: 80,
   },
   swipeableContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingVertical: 12,
+    height: 80,
   },
   innerContainer: {
     width: "100%",
@@ -155,6 +156,7 @@ const styles = StyleSheet.create({
   },
   deleteItem: {
     width: "20%",
+    height: "100%",
     alignItems: "center",
     justifyContent: "center",
   },
