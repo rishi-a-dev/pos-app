@@ -365,10 +365,16 @@ const Dashboard = () => {
     const initialOrderListLength = orderList.length;
     finalizeMetaRef.current = { initialOrderListLength, selectedIndex };
 
+    const isNewKot = currentOrder.table?.transactionID == null;
+    const itemsForKot = isNewKot
+      ? // New KOT: do not send any client-side `transactionId` per item.
+        currentOrder.items.map(({ transactionId, ...rest }) => rest)
+      : currentOrder.items;
+
     const body = {
       id: currentOrder.table.transactionID ?? null,
       date: new Date().toISOString(),
-      items: currentOrder.items,
+      items: itemsForKot,
     };
 
     const chairName = currentOrder.table.chairName ?? "0";
@@ -384,8 +390,6 @@ const Dashboard = () => {
     } finally {
       setIsKotFetching(false);
     }
-    console.log("body", JSON.stringify(body));
-    console.log("respData", respData);
     if (!respData) return;
     const groups = normalizePrinterGroups(respData);
     if (groups.length === 0) {

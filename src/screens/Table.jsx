@@ -181,6 +181,9 @@ const Table = () => {
     const newTable = {
       ...table,
       chairName: nextChairNumber.toString().padStart(2, "0"),
+      // New KOT should not reuse an existing transaction from the selected row.
+      // Backend should generate a fresh transaction when we print this KOT.
+      transactionID: null,
     };
 
     const nextTableList = [...(Array.isArray(tableList) ? tableList : []), newTable];
